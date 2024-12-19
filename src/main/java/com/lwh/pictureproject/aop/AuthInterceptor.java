@@ -20,7 +20,7 @@ import javax.servlet.http.HttpServletRequest;
 /**
  * @author Lin
  * @version 1.0.0
- * @description TODO
+ * @description 切面，处理 用户权限校验注解
  * @date 2024/12/19 20:29
  */
 @Aspect
