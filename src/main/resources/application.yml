@@ -11,6 +11,8 @@ spring:
     url: jdbc:mysql://localhost:3306/lin_picture?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: root
+  profiles:
+    active: local
 mybatis-plus:
   configuration:
     # 仅在开发环境开启日志

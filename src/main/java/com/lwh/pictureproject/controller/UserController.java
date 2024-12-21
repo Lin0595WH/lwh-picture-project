@@ -2,7 +2,6 @@ package com.lwh.pictureproject.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.http.server.HttpServerRequest;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lwh.pictureproject.annotation.AuthCheck;
 import com.lwh.pictureproject.common.BaseResponse;
@@ -19,8 +18,10 @@ import com.lwh.pictureproject.model.vo.UserVO;
 import com.lwh.pictureproject.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
-import org.springframework.util.StringUtils;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -41,7 +42,6 @@ public class UserController {
      * 用户注册
      **/
     @PostMapping("/register")
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Long> userRegister(@RequestBody UserRegisterRequest userRegisterRequest) {
         ThrowUtils.throwIf(userRegisterRequest == null, ErrorCode.PARAMS_ERROR, "参数为空！");
         long userId = userService.userRegister(userRegisterRequest);
@@ -55,7 +55,7 @@ public class UserController {
     public BaseResponse<LoginUserVO> userLogin(@RequestBody UserLoginRequest userLoginRequest, HttpServletRequest request) {
 
         LoginUserVO userVO = userService.userLogin(userLoginRequest, request);
-        return ResultUtils.success(userVO);
+        return ResultUtils.success(userVO, "登录成功！");
     }
 
     /**
@@ -114,7 +114,7 @@ public class UserController {
      */
     @PostMapping("/get/vo")
     public BaseResponse<UserVO> getUserVOById(long id) {
-        BaseResponse<User> response = getUserById(id);
+        BaseResponse<User> response = this.getUserById(id);
         User user = response.getData();
         return ResultUtils.success(userService.getUserVO(user));
     }
@@ -158,7 +158,7 @@ public class UserController {
         ThrowUtils.throwIf(userQueryRequest == null, ErrorCode.PARAMS_ERROR);
         long current = userQueryRequest.getCurrent();
         long pageSize = userQueryRequest.getPageSize();
-        ThrowUtils.throwIf(pageSize < 1 || pageSize > 50, ErrorCode.PARAMS_ERROR, "每页查询条数必须在1到50之间！");
+        ThrowUtils.throwIf(pageSize < 1 || pageSize > 100, ErrorCode.PARAMS_ERROR, "每页查询条数必须在1到100之间！");
         // 获取用户的分页数据
         Page<User> userPage = userService.page(new Page<>(current, pageSize),
                 userService.getQueryWrapper(userQueryRequest));

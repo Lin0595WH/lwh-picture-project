@@ -1,3 +1,7 @@
+### 忽略我的本地配置项 ###
+application-local.yml
+
+
 HELP.md
 target/
 !.mvn/wrapper/maven-wrapper.jar
@@ -31,3 +35,5 @@ build/
 
 ### VS Code ###
 .vscode/
+
+
