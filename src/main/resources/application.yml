@@ -13,6 +13,10 @@ spring:
     password: root
   profiles:
     active: local
+  # 设置下文件上传大小
+  servlet:
+    multipart:
+      max-file-size: 10MB
 mybatis-plus:
   configuration:
     # 仅在开发环境开启日志

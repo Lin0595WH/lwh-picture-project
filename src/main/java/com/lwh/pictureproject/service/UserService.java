@@ -1,13 +1,11 @@
 package com.lwh.pictureproject.service;
 
-import cn.hutool.http.server.HttpServerRequest;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.service.IService;
 import com.lwh.pictureproject.model.dto.user.UserLoginRequest;
 import com.lwh.pictureproject.model.dto.user.UserQueryRequest;
 import com.lwh.pictureproject.model.dto.user.UserRegisterRequest;
 import com.lwh.pictureproject.model.entity.User;
-import com.baomidou.mybatisplus.extension.service.IService;
 import com.lwh.pictureproject.model.vo.LoginUserVO;
 import com.lwh.pictureproject.model.vo.UserVO;
 
@@ -15,12 +13,12 @@ import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
 /**
-* @author Lin
-* @description 针对表【user(用户)】的数据库操作Service
-* @createDate 2024-12-18 20:48:00
-*/
+ * @author Lin
+ * @description 针对表【user(用户)】的数据库操作Service
+ * @createDate 2024-12-18 20:48:00
+ */
 public interface UserService extends IService<User> {
-    
+
     /**
      * 用户注册
      **/
@@ -65,4 +63,9 @@ public interface UserService extends IService<User> {
      * 获取查询条件
      */
     QueryWrapper<User> getQueryWrapper(UserQueryRequest userQueryRequest);
+
+    /**
+     * 是否为管理员
+     */
+    boolean isAdmin(User loginUser);
 }

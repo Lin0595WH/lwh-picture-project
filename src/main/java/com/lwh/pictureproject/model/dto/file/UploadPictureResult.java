@@ -1,11 +1,17 @@
 package com.lwh.pictureproject.model.dto.file;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * 上传图片的结果
  */
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class UploadPictureResult {
 
     /**

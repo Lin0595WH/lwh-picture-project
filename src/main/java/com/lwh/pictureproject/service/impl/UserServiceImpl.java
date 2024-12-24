@@ -3,13 +3,12 @@ package com.lwh.pictureproject.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.http.server.HttpServerRequest;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lwh.pictureproject.constant.UserConstant;
-import com.lwh.pictureproject.exception.BusinessException;
 import com.lwh.pictureproject.exception.ErrorCode;
 import com.lwh.pictureproject.exception.ThrowUtils;
+import com.lwh.pictureproject.mapper.UserMapper;
 import com.lwh.pictureproject.model.dto.user.UserLoginRequest;
 import com.lwh.pictureproject.model.dto.user.UserQueryRequest;
 import com.lwh.pictureproject.model.dto.user.UserRegisterRequest;
@@ -18,7 +17,6 @@ import com.lwh.pictureproject.model.enums.UserRoleEnum;
 import com.lwh.pictureproject.model.vo.LoginUserVO;
 import com.lwh.pictureproject.model.vo.UserVO;
 import com.lwh.pictureproject.service.UserService;
-import com.lwh.pictureproject.mapper.UserMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
@@ -66,7 +64,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         long count = this.count(queryWrapper);
         ThrowUtils.throwIf(count > 0, ErrorCode.PARAMS_ERROR, "账号重复！");
         // 3.加密密码
-        String encryptPassword = getEncryptPassword(userPassword);
+        String encryptPassword = this.getEncryptPassword(userPassword);
         // 4.插入数据
         User user = User.builder()
                 .userName("默认名称")
@@ -102,7 +100,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 英文存比较省空间
         log.error("User login failed: Current login user does not exist!");
         // 3.校验密码
-        String encryptPassword = getEncryptPassword(userPassword);
+        String encryptPassword = this.getEncryptPassword(userPassword);
         //不告诉用户到底是 账号不存在 还是 密码错误，降低泄露风险
         ThrowUtils.throwIf(!encryptPassword.equals(user.getUserPassword()), ErrorCode.PARAMS_ERROR, "用户不存在或密码错误！");
         // 英文存比较省空间
@@ -211,7 +209,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public QueryWrapper<User> getQueryWrapper(UserQueryRequest userQueryRequest) {
         // 1.校验
-        ThrowUtils.throwIf(userQueryRequest == null, ErrorCode.PARAMS_ERROR,"请求参数为空！" );
+        ThrowUtils.throwIf(userQueryRequest == null, ErrorCode.PARAMS_ERROR, "请求参数为空！");
         Long id = userQueryRequest.getId();
         String userName = userQueryRequest.getUserName();
         String userAccount = userQueryRequest.getUserAccount();
@@ -229,6 +227,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         queryWrapper.like(StrUtil.isNotBlank(userProfile), "user_profile", userProfile);
         queryWrapper.orderBy(StrUtil.isNotEmpty(sortField), sortOrder.equals("ascend"), sortField);
         return queryWrapper;
+    }
+
+    /**
+     * @param loginUser 当前登录用户
+     * @description: 是否为管理员
+     * @author: Lin
+     * @date: 2024/12/24 21:57
+     * @return: boolean
+     **/
+    @Override
+    public boolean isAdmin(User loginUser) {
+        return loginUser != null && UserRoleEnum.ADMIN.getValue().equals(loginUser.getUserRole());
     }
 
 
