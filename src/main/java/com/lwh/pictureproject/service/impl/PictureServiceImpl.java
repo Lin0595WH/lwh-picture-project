@@ -9,11 +9,15 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lwh.pictureproject.exception.BusinessException;
 import com.lwh.pictureproject.exception.ErrorCode;
 import com.lwh.pictureproject.exception.ThrowUtils;
-import com.lwh.pictureproject.manager.FileManager;
+import com.lwh.pictureproject.manager.CosManager;
+import com.lwh.pictureproject.manager.upload.FilePictureUpload;
+import com.lwh.pictureproject.manager.upload.PictureUploadTemplate;
+import com.lwh.pictureproject.manager.upload.UrlPictureUpload;
 import com.lwh.pictureproject.mapper.PictureMapper;
 import com.lwh.pictureproject.model.dto.file.UploadPictureResult;
 import com.lwh.pictureproject.model.dto.picture.PictureQueryRequest;
 import com.lwh.pictureproject.model.dto.picture.PictureReviewRequest;
+import com.lwh.pictureproject.model.dto.picture.PictureUploadByBatchRequest;
 import com.lwh.pictureproject.model.dto.picture.PictureUploadRequest;
 import com.lwh.pictureproject.model.entity.Picture;
 import com.lwh.pictureproject.model.entity.User;
@@ -23,10 +27,16 @@ import com.lwh.pictureproject.model.vo.UserVO;
 import com.lwh.pictureproject.service.PictureService;
 import com.lwh.pictureproject.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
+import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -35,13 +45,17 @@ import java.util.stream.Collectors;
  * @description 针对表【picture(图片)】的数据库操作Service实现
  * @createDate 2024-12-21 23:58:47
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> implements PictureService {
 
-    private final FileManager fileManager;
-
     private final UserService userService;
+
+    private final FilePictureUpload filePictureUpload;
+
+    private final UrlPictureUpload urlPictureUpload;
+    private final CosManager cosManager;
 
     /**
      * @param picture 图片
@@ -66,7 +80,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
     }
 
     /**
-     * @param multipartFile        文件
+     * @param inputSource          文件输入源
      * @param pictureUploadRequest 图片上传请求
      * @param loginUser            当前登录用户
      * @description: 上传图片
@@ -75,7 +89,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
      * @return: com.lwh.pictureproject.model.vo.PictureVO
      **/
     @Override
-    public PictureVO uploadPicture(MultipartFile multipartFile, PictureUploadRequest pictureUploadRequest, User loginUser) {
+    public PictureVO uploadPicture(Object inputSource, PictureUploadRequest pictureUploadRequest, User loginUser) {
         // 校验参数
         ThrowUtils.throwIf(loginUser == null, ErrorCode.NO_AUTH_ERROR);
         Long userId = loginUser.getId();
@@ -98,29 +112,46 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         // 上传图片，得到图片信息
         // 按照用户 id 划分目录
         String uploadPathPrefix = String.format("public/%s", userId);
-        UploadPictureResult uploadPictureResult = fileManager.uploadPicture(multipartFile, uploadPathPrefix);
+        // 根据输入源判断上传方式，是文件还是url
+        PictureUploadTemplate pictureUploadTemplate = filePictureUpload;
+        if (inputSource instanceof String) {
+            pictureUploadTemplate = urlPictureUpload;
+        }
+        UploadPictureResult uploadPictureResult = pictureUploadTemplate.uploadPicture(inputSource, uploadPathPrefix);
         // 构造要入库的图片信息
+        // 2025.1.2 请求参数新增图片名称，如果有，那么用这个，否则用文件名
+        String picName = (pictureUploadRequest != null && StrUtil.isNotBlank(pictureUploadRequest.getPicName()))
+                ? pictureUploadRequest.getPicName() : uploadPictureResult.getPicName();
         Picture picture = Picture.builder()
                 .url(uploadPictureResult.getUrl())
-                .name(uploadPictureResult.getPicName())
+                .name(picName)
                 .picSize(uploadPictureResult.getPicSize())
                 .picWidth(uploadPictureResult.getPicWidth())
                 .picHeight(uploadPictureResult.getPicHeight())
                 .picScale(uploadPictureResult.getPicScale())
                 .picFormat(uploadPictureResult.getPicFormat())
                 .userId(userId)
+                // 拿不到缩略图就拿原图
+                .thumbnailUrl(StrUtil.isNotBlank(uploadPictureResult.getThumbnailUrl())
+                        ? uploadPictureResult.getThumbnailUrl() : uploadPictureResult.getUrl())
                 .build();
         // 2024.12.27 加入审核部分的判断
         this.fillReviewParams(picture, loginUser);
         // 操作数据库
         // 如果 pictureId 不为空，表示更新，否则是新增
-        if (pictureId != null) {
+        boolean isUpdate = pictureId != null;
+        if (isUpdate) {
             // 如果是更新，需要补充 id 和编辑时间
             picture.setId(pictureId);
             picture.setEditTime(new Date());
         }
         boolean result = this.saveOrUpdate(picture);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "图片上传失败，数据库操作失败");
+        // 如果是更新的话，要把对象存储中，旧文件给删除
+        if (isUpdate) {
+            String oldUrl = this.getById(pictureId).getUrl();
+            cosManager.deleteObject(oldUrl);
+        }
         return PictureVO.objToVo(picture);
     }
 
@@ -289,6 +320,109 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         } else {
             // 非管理员,上传或者编辑，都是需要审核的
             picture.setReviewStatus(PictureReviewStatusEnum.REVIEWING.getValue());
+        }
+    }
+
+    /**
+     * @param pictureUploadByBatchRequest 批量上传图片请求
+     * @param loginUser                   当前登录用户
+     * @description: 批量抓取和创建图片
+     * @author: Lin
+     * @date: 2025/1/2 20:33
+     * @return: java.lang.Integer 创建成功的图片数量
+     **/
+    @Override
+    public Integer uploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, User loginUser) {
+        // 校验参数
+        String searchText = pictureUploadByBatchRequest.getSearchText();
+        Integer count = pictureUploadByBatchRequest.getCount();
+        ThrowUtils.throwIf(StrUtil.isBlank(searchText), ErrorCode.PARAMS_ERROR, "搜索词不能为空");
+        ThrowUtils.throwIf(count > 30, ErrorCode.PARAMS_ERROR, "最多 30 条");
+        // 名称前缀默认等于搜索关键词
+        String namePrefix = pictureUploadByBatchRequest.getNamePrefix();
+        if (StrUtil.isBlank(namePrefix)) {
+            namePrefix = searchText;
+        }
+        // 抓取内容
+        String fetchUrl = String.format("https://cn.bing.com/images/async?q=%s&mmasync=1", searchText);
+        Document document;
+        try {
+            document = Jsoup.connect(fetchUrl).get();
+        } catch (IOException e) {
+            log.error("获取页面失败", e);
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "获取页面失败");
+        }
+        // 解析内容
+        Element div = document.getElementsByClass("dgControl").first();
+        if (div == null || ObjUtil.isEmpty(div)) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "获取元素失败");
+        }
+        Elements imgElementList = div.select("img.mimg");
+        // 遍历元素，依次处理上传图片
+        int uploadCount = 0;
+        for (Element imgElement : imgElementList) {
+            String fileUrl = imgElement.attr("src");
+            if (StrUtil.isBlank(fileUrl)) {
+                log.info("当前链接为空，已跳过：{}", fileUrl);
+                continue;
+            }
+            // 处理图片的地址，防止转义或者和对象存储冲突的问题
+            // codefather.cn?yupi=dog，应该只保留 codefather.cn
+            int questionMarkIndex = fileUrl.indexOf("?");
+            if (questionMarkIndex > -1) {
+                fileUrl = fileUrl.substring(0, questionMarkIndex);
+            }
+            // 上传图片
+            PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
+            pictureUploadRequest.setFileUrl(fileUrl);
+            pictureUploadRequest.setPicName(namePrefix + (uploadCount + 1));
+            try {
+                PictureVO pictureVO = this.uploadPicture(fileUrl, pictureUploadRequest, loginUser);
+                log.info("图片上传成功，id = {}", pictureVO.getId());
+                uploadCount++;
+            } catch (Exception e) {
+                log.error("图片上传失败", e);
+                continue;
+            }
+            if (uploadCount >= count) {
+                break;
+            }
+        }
+        return uploadCount;
+    }
+
+    /**
+     * @param picture 要清理的图片对象
+     * @description: 清理图片文件
+     * @author: Lin
+     * @date: 2025/1/7 21:48
+     * @return: void
+     **/
+    @Async
+    @Override
+    public void clearPictureFile(Picture picture) {
+        // 校验
+        ThrowUtils.throwIf(picture == null, ErrorCode.PARAMS_ERROR);
+        String fileUrl = picture.getUrl();
+        // 找不到图片路径，也就不清理了
+        if (StrUtil.isBlank(fileUrl)) {
+            return;
+        }
+        // 该图片地址的使用次数
+        long count = this.lambdaQuery()
+                .eq(Picture::getUrl, fileUrl)
+                .count();
+        // 如果 count > 1，说明该图片地址被其他图片引用，不进行清理
+        if (count > 1) {
+            return;
+        }
+        // 删除图片文件
+        cosManager.deleteObject(fileUrl);
+        // 删除缩略图
+        String thumbnailUrl = picture.getThumbnailUrl();
+        // 这里要有缩略图，且缩略图不等于原图才去删，因为之前可能会把原图当作缩略图用，那前面就已经删除了
+        if (StrUtil.isNotBlank(thumbnailUrl) && !fileUrl.equals(thumbnailUrl)) {
+            cosManager.deleteObject(thumbnailUrl);
         }
     }
 }

@@ -29,11 +29,12 @@ import java.util.Set;
 /**
  * @author Lin
  * @version 1.0.0
- * @description 通用的文件上传下载
+ * @description 通用的文件上传下载 ，2025-01-01 已废弃，改为使用 upload 包的模板方法优化
  * @date 2024/12/22 0:16
  */
 @Slf4j
 @Service
+@Deprecated
 @RequiredArgsConstructor
 public class FileManager {
 
@@ -164,7 +165,8 @@ public class FileManager {
         String fileName = multipartFile.getOriginalFilename();
         ThrowUtils.throwIf(fileName == null, ErrorCode.PARAMS_ERROR, "上传文件名称为空");
         String suffix = FileUtil.getSuffix(fileName);
-        ThrowUtils.throwIf(!ALLOW_IMAGE_SUFFIXES.contains(suffix), ErrorCode.PARAMS_ERROR, "不支持的图片格式：" + suffix);
+        ThrowUtils.throwIf(!ALLOW_IMAGE_SUFFIXES.contains(suffix), ErrorCode.PARAMS_ERROR,
+                "不支持的图片格式：" + suffix);
         // 3.返回文件后缀
         return suffix;
     }

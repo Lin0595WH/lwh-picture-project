@@ -1,5 +1,6 @@
 package com.lwh.pictureproject.controller;
 
+import cn.hutool.core.util.RandomUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lwh.pictureproject.annotation.AuthCheck;
@@ -17,8 +18,10 @@ import com.lwh.pictureproject.model.vo.PictureTagCategory;
 import com.lwh.pictureproject.model.vo.PictureVO;
 import com.lwh.pictureproject.service.PictureService;
 import com.lwh.pictureproject.service.UserService;
+import com.lwh.pictureproject.util.CacheUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
+import org.springframework.util.DigestUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -38,15 +41,36 @@ import java.util.List;
 public class PictureController {
 
     private final PictureService pictureService;
+
     private final UserService userService;
 
     /**
      * 上传图片（可重新上传）
      */
     @PostMapping("/upload")
-    public BaseResponse<PictureVO> uploadPicture(@RequestPart("file") MultipartFile multipartFile, PictureUploadRequest pictureUploadRequest, HttpServletRequest request) {
+    public BaseResponse<PictureVO> uploadPicture(@RequestPart("file") MultipartFile multipartFile,
+                                                 PictureUploadRequest pictureUploadRequest,
+                                                 HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
         PictureVO pictureVO = pictureService.uploadPicture(multipartFile, pictureUploadRequest, loginUser);
+        // 同时要清除下图片列表的缓存，因为这个时候可能已经不是这些数据了
+        CacheUtil.removeCache("lin_picture:listPictureVOByPage:", 1);
+        return ResultUtils.success(pictureVO);
+    }
+
+    /**
+     * 通过URL上传图片（可重新上传）
+     */
+    @PostMapping("/upload/url")
+    public BaseResponse<PictureVO> uploadPictureByUrl(@RequestBody PictureUploadRequest pictureUploadRequest,
+                                                      HttpServletRequest request) {
+        ThrowUtils.throwIf((pictureUploadRequest == null || pictureUploadRequest.getFileUrl() == null),
+                ErrorCode.PARAMS_ERROR);
+        String fileURL = pictureUploadRequest.getFileUrl();
+        User loginUser = userService.getLoginUser(request);
+        PictureVO pictureVO = pictureService.uploadPicture(fileURL, pictureUploadRequest, loginUser);
+        // 同时要清除下图片列表的缓存，因为这个时候可能已经不是这些数据了
+        CacheUtil.removeCache("lin_picture:listPictureVOByPage:", 1);
         return ResultUtils.success(pictureVO);
     }
 
@@ -62,10 +86,15 @@ public class PictureController {
         Picture oldPicture = pictureService.getById(deletePictureId);
         ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR);
         // 仅本人或者管理员可删除
-        ThrowUtils.throwIf((!oldPicture.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)), ErrorCode.NO_AUTH_ERROR);
+        ThrowUtils.throwIf((!oldPicture.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)),
+                ErrorCode.NO_AUTH_ERROR);
         // 操作数据库
         boolean result = pictureService.removeById(deletePictureId);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+        // 清理下对象存储中的图片
+        pictureService.clearPictureFile(oldPicture);
+        // 同时要清除下图片列表的缓存，因为这个时候可能已经不是这些数据了
+        CacheUtil.removeCache("lin_picture:listPictureVOByPage:", 1);
         return ResultUtils.success(true, "图片删除成功");
     }
 
@@ -75,8 +104,10 @@ public class PictureController {
      */
     @PostMapping("/update")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<Boolean> updatePicture(@RequestBody PictureUpdateRequest pictureUpdateRequest, HttpServletRequest request) {
-        ThrowUtils.throwIf((pictureUpdateRequest == null || pictureUpdateRequest.getId() <= 0), ErrorCode.PARAMS_ERROR);
+    public BaseResponse<Boolean> updatePicture(@RequestBody PictureUpdateRequest pictureUpdateRequest,
+                                               HttpServletRequest request) {
+        ThrowUtils.throwIf((pictureUpdateRequest == null || pictureUpdateRequest.getId() <= 0),
+                ErrorCode.PARAMS_ERROR);
         // 将实体类和 DTO 进行转换
         Picture picture = new Picture();
         BeanUtils.copyProperties(pictureUpdateRequest, picture);
@@ -93,6 +124,8 @@ public class PictureController {
         // 操作数据库
         boolean result = pictureService.updateById(picture);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+        // 同时要清除下图片列表的缓存，因为这个时候可能已经不是这些数据了
+        CacheUtil.removeCache("lin_picture:listPictureVOByPage:", 1);
         return ResultUtils.success(true);
     }
 
@@ -132,7 +165,8 @@ public class PictureController {
         long current = pictureQueryRequest.getCurrent();
         long size = pictureQueryRequest.getPageSize();
         // 查询数据库
-        Page<Picture> picturePage = pictureService.page(new Page<>(current, size), pictureService.getQueryWrapper(pictureQueryRequest));
+        Page<Picture> picturePage = pictureService.page(new Page<>(current, size),
+                pictureService.getQueryWrapper(pictureQueryRequest));
         return ResultUtils.success(picturePage);
     }
 
@@ -140,7 +174,32 @@ public class PictureController {
      * 分页获取图片列表（封装类）
      */
     @PostMapping("/list/page/vo")
-    public BaseResponse<Page<PictureVO>> listPictureVOByPage(@RequestBody PictureQueryRequest pictureQueryRequest, HttpServletRequest request) {
+    public BaseResponse<Page<PictureVO>> listPictureVOByPage(@RequestBody PictureQueryRequest pictureQueryRequest,
+                                                             HttpServletRequest request) {
+        long current = pictureQueryRequest.getCurrent();
+        long size = pictureQueryRequest.getPageSize();
+        User loginUser = userService.getLoginUser(request);
+        boolean admin = userService.isAdmin(loginUser);
+        if (!admin) {
+            // 2024.12.27 加了审核逻辑，所以普通用户只能看审核通过的图片
+            pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
+        }
+        // 限制爬虫，同时不是管理员才触发此限制
+        ThrowUtils.throwIf(size > 20 && !admin, ErrorCode.PARAMS_ERROR);
+        // 查询数据库
+        Page<Picture> picturePage = pictureService.page(new Page<>(current, size),
+                pictureService.getQueryWrapper(pictureQueryRequest));
+        // 获取封装类
+        return ResultUtils.success(pictureService.getPictureVOPage(picturePage, request));
+    }
+
+    /**
+     * 分页获取图片列表（封装类）(使用缓存版)
+     */
+    @PostMapping("/list/page/vo/cache")
+    public BaseResponse<Page<PictureVO>> listPictureVOByPageWithCache(@RequestBody PictureQueryRequest pictureQueryRequest,
+                                                                      HttpServletRequest request) {
+        // 1.校验
         long current = pictureQueryRequest.getCurrent();
         long size = pictureQueryRequest.getPageSize();
         User loginUser = userService.getLoginUser(request);
@@ -150,18 +209,39 @@ public class PictureController {
             pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
         }
         // 限制爬虫
-        ThrowUtils.throwIf(size > 20, ErrorCode.PARAMS_ERROR);
-        // 查询数据库
-        Page<Picture> picturePage = pictureService.page(new Page<>(current, size), pictureService.getQueryWrapper(pictureQueryRequest));
-        // 获取封装类
-        return ResultUtils.success(pictureService.getPictureVOPage(picturePage, request));
+        ThrowUtils.throwIf(size > 20 && !admin, ErrorCode.PARAMS_ERROR);
+        // 2.查库之前先查缓存
+        // 2.1构造缓存的key : 将请求参数转为json字符串，然后进行md5加密，作为缓存的key
+        String jsonStr = JSONUtil.toJsonStr(pictureQueryRequest);
+        String hashKey = DigestUtils.md5DigestAsHex(jsonStr.getBytes());
+        String cacheKey = String.format("lin_picture:listPictureVOByPage:%s", hashKey);
+        // 2.从缓存中获取数据
+        String cachedValue = CacheUtil.getFromCache(cacheKey);
+        if (cachedValue != null) {
+            // 命中缓存，直接返回
+            return ResultUtils.success(JSONUtil.toBean(cachedValue, Page.class));
+        }
+        // 3.没命中缓存，则查询数据库
+        Page<Picture> picturePage = pictureService.page(new Page<>(current, size),
+                pictureService.getQueryWrapper(pictureQueryRequest));
+        // 将结果包装为封装类
+        Page<PictureVO> pictureVOPage = pictureService.getPictureVOPage(picturePage, request);
+        // 4.将结果存入缓存
+        String cacheValue = JSONUtil.toJsonStr(pictureVOPage);
+        // 设置缓存的过期时间，5 - 10 分钟过期，防止缓存雪崩
+        int cacheExpireTime = 300 + RandomUtil.randomInt(0, 300);
+        // 写入缓存
+        CacheUtil.putToCache(cacheKey, cacheValue, cacheExpireTime);
+        return ResultUtils.success(pictureVOPage);
     }
+
 
     /**
      * 编辑图片（给用户使用）
      */
     @PostMapping("/edit")
-    public BaseResponse<Boolean> editPicture(@RequestBody PictureEditRequest pictureEditRequest, HttpServletRequest request) {
+    public BaseResponse<Boolean> editPicture(@RequestBody PictureEditRequest pictureEditRequest,
+                                             HttpServletRequest request) {
         ThrowUtils.throwIf((pictureEditRequest == null || pictureEditRequest.getId() <= 0), ErrorCode.PARAMS_ERROR);
         // 在此处将实体类和 DTO 进行转换
         Picture picture = new Picture();
@@ -178,12 +258,15 @@ public class PictureController {
         Picture oldPicture = pictureService.getById(id);
         ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR);
         // 仅本人或管理员可编辑
-        ThrowUtils.throwIf((!oldPicture.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)), ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf((!oldPicture.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)),
+                ErrorCode.PARAMS_ERROR);
         // 2024.12.27 加入审核部分的判断
         pictureService.fillReviewParams(picture, loginUser);
         // 操作数据库
         boolean result = pictureService.updateById(picture);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+        // 同时要清除下图片列表的缓存，因为这个时候可能已经不是这些数据了
+        CacheUtil.removeCache("lin_picture:listPictureVOByPage:", 1);
         return ResultUtils.success(true);
     }
 
@@ -208,5 +291,18 @@ public class PictureController {
         User loginUser = userService.getLoginUser(request);
         pictureService.doPictureReview(pictureReviewRequest, loginUser);
         return ResultUtils.success(true);
+    }
+
+    /**
+     * 批量抓取并创建图片（管理员专用）
+     */
+    @PostMapping("/upload/batch")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Integer> uploadPictureByBatch(@RequestBody PictureUploadByBatchRequest pictureUploadByBatchRequest,
+                                                      HttpServletRequest request) {
+        ThrowUtils.throwIf(pictureUploadByBatchRequest == null, ErrorCode.PARAMS_ERROR);
+        User loginUser = userService.getLoginUser(request);
+        Integer count = pictureService.uploadPictureByBatch(pictureUploadByBatchRequest, loginUser);
+        return ResultUtils.success(count);
     }
 }

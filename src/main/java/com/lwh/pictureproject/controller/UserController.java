@@ -1,6 +1,7 @@
 package com.lwh.pictureproject.controller;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lwh.pictureproject.annotation.AuthCheck;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -55,7 +57,7 @@ public class UserController {
     public BaseResponse<LoginUserVO> userLogin(@RequestBody UserLoginRequest userLoginRequest, HttpServletRequest request) {
 
         LoginUserVO userVO = userService.userLogin(userLoginRequest, request);
-        return ResultUtils.success(userVO, "登录成功！");
+        return ResultUtils.success(userVO, "登录成功！当前登录时间：" + DateUtil.format(new Date(), "yyyy-MM-dd HH:mm:ss"));
     }
 
     /**
