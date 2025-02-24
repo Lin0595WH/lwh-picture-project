@@ -1,5 +1,6 @@
 package com.lwh.pictureproject.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
@@ -22,11 +23,14 @@ import com.lwh.pictureproject.service.SpaceService;
 import com.lwh.pictureproject.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -37,16 +41,77 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space> implements SpaceService {
+
     private final UserService userService;
 
+    private final TransactionTemplate transactionTemplate;
+
+    private final ConcurrentHashMap<Long, Object> lockMap = new ConcurrentHashMap<>();
+
+    /**
+     * @param spaceAddRequest 创建空间请求
+     * @param loginUser       当前登录用户
+     * @description: 创建空间
+     * @author: Lin
+     * @date: 2025/1/16 21:11
+     * @return: long
+     **/
     @Override
     public long addSpace(SpaceAddRequest spaceAddRequest, User loginUser) {
-        return 0;
+        Space space = new Space();
+        BeanUtil.copyProperties(spaceAddRequest, space);
+        // 填充默认值
+        if (StrUtil.isBlank(space.getSpaceName())) {
+            space.setSpaceName("默认空间");
+        }
+        if (space.getSpaceLevel() == null) {
+            space.setSpaceLevel(SpaceLevelEnum.COMMON.getValue());
+        }
+        // 填充容量和大小
+        this.fillSpaceBySpaceLevel(space);
+        // 校验参数
+        this.validSpace(space, true);
+        // 校验权限,普通用户只能创建普通的空间
+        Long userId = loginUser.getId();
+        space.setUserId(userId);
+        boolean admin = userService.isAdmin(loginUser);
+        ThrowUtils.throwIf(!admin && SpaceLevelEnum.COMMON.getValue() != space.getSpaceLevel(),
+                ErrorCode.PARAMS_ERROR, "无权限创建高级空间");
+        // 4. 控制同一用户只能创建一个私有空间
+        // 针对用户进行加锁
+        // 这种使用字符串常量池的加锁方式，数据不会及时释放，优化为使用ConcurrentHashMap的方式
+        //String lock = String.valueOf(userId).intern();
+        Object lock = lockMap.computeIfAbsent(userId, k -> new Object());
+        try {
+            synchronized (lock) {
+                return Optional.ofNullable(transactionTemplate.execute(status -> {
+                    try {
+                        // 判断是否已有空间
+                        boolean exists = this.lambdaQuery()
+                                .eq(Space::getUserId, userId)
+                                .exists();
+                        // 如果已有空间，就不能再创建
+                        ThrowUtils.throwIf(exists, ErrorCode.OPERATION_ERROR, "每个用户仅能有一个私有空间");
+                        // 创建
+                        boolean result = this.save(space);
+                        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "保存空间到数据库失败");
+                        // 返回新写入的数据 id
+                        return space.getId();
+                    } catch (Exception e) {
+                        status.setRollbackOnly();
+                        log.error("创建空间失败", e);
+                        throw new BusinessException(ErrorCode.OPERATION_ERROR, e.getMessage());
+                    }
+                })).orElse(-1L);
+            }
+        } finally {
+            lockMap.remove(userId);
+        }
     }
 
     /**
      * @param space 空间
-     * @param add   是否为创建时检验
+     * @param add 是否为创建时检验
      * @description: 校验空间
      * @author: Lin
      * @date: 2025/1/13 21:11
@@ -196,9 +261,23 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space> implements
         }
     }
 
+    /**
+     * @param loginUser 当前登录用户
+     * @param space     空间对象
+     * @description: 校验当前用户是否有空间权限
+     * @author: Lin
+     * @date: 2025/1/16 22:42
+     * @return: void
+     **/
     @Override
     public void checkSpaceAuth(User loginUser, Space space) {
-
+        if (space == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "当前空间不存在");
+        }
+        // 空间的用户id和当前登录用户id是否一致
+        if (!space.getUserId().equals(loginUser.getId())) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "没有空间权限");
+        }
     }
 }
 

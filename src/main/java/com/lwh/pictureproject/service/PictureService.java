@@ -3,10 +3,7 @@ package com.lwh.pictureproject.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.lwh.pictureproject.model.dto.picture.PictureQueryRequest;
-import com.lwh.pictureproject.model.dto.picture.PictureReviewRequest;
-import com.lwh.pictureproject.model.dto.picture.PictureUploadByBatchRequest;
-import com.lwh.pictureproject.model.dto.picture.PictureUploadRequest;
+import com.lwh.pictureproject.model.dto.picture.*;
 import com.lwh.pictureproject.model.entity.Picture;
 import com.lwh.pictureproject.model.entity.User;
 import com.lwh.pictureproject.model.vo.PictureVO;
@@ -67,4 +64,19 @@ public interface PictureService extends IService<Picture> {
      * 清理图片文件
      */
     void clearPictureFile(Picture picture);
+
+    /**
+     * 校验图片权限
+     */
+    void checkPictureAuth(User loginUser, Picture picture);
+
+    /**
+     * 删除图片
+     */
+    void deletePicture(long deletePictureId, User loginUser);
+
+    /**
+     * 编辑图片（给用户用）
+     */
+    void editPicture(PictureEditRequest pictureEditRequest, User loginUser);
 }

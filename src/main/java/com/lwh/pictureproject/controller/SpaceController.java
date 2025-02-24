@@ -84,6 +84,7 @@ public class SpaceController {
         // 操作数据库
         boolean result = spaceService.removeById(id);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+        // TODO 删除空间时，清理掉空间内的图片
         return ResultUtils.success(true);
     }
 
@@ -138,7 +139,7 @@ public class SpaceController {
      * 根据 id 获取空间（封装类）
      */
     @PostMapping("/get/vo")
-    public BaseResponse<SpaceVO> getSpaceVOById(long id, HttpServletRequest request) {
+    public BaseResponse<SpaceVO> getSpaceVOById(@RequestBody long id, HttpServletRequest request) {
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
         // 查询数据库
         Space space = spaceService.getById(id);
