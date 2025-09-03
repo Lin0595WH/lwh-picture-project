@@ -16,6 +16,7 @@
         <result property="picHeight" column="pic_height" jdbcType="INTEGER"/>
         <result property="picScale" column="pic_scale" jdbcType="DOUBLE"/>
         <result property="picFormat" column="pic_format" jdbcType="VARCHAR"/>
+        <result property="picColor" column="pic_color" jdbcType="VARCHAR"/>
         <result property="userId" column="user_id" jdbcType="BIGINT"/>
         <result property="createTime" column="create_time" jdbcType="TIMESTAMP"/>
         <result property="editTime" column="edit_time" jdbcType="TIMESTAMP"/>

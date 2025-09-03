@@ -1,6 +1,7 @@
 package com.lwh.pictureproject.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.text.CharSequenceUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
@@ -28,6 +29,8 @@ import com.lwh.pictureproject.service.PictureService;
 import com.lwh.pictureproject.service.SpaceService;
 import com.lwh.pictureproject.service.UserService;
 import com.lwh.pictureproject.util.CacheUtil;
+import com.lwh.pictureproject.util.ColorSimilarUtils;
+import com.lwh.pictureproject.util.ColorTransformUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
@@ -40,8 +43,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.servlet.http.HttpServletRequest;
+import java.awt.*;
 import java.io.IOException;
 import java.util.*;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -165,8 +170,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         UploadPictureResult uploadPictureResult = pictureUploadTemplate.uploadPicture(inputSource, uploadPathPrefix);
         // 构造要入库的图片信息
         // 2025.1.2 请求参数新增图片名称，如果有，那么用这个，否则用文件名
-        String picName = (pictureUploadRequest != null && StrUtil.isNotBlank(pictureUploadRequest.getPicName()))
+        String picName = (pictureUploadRequest != null && CharSequenceUtil.isNotBlank(pictureUploadRequest.getPicName()))
                 ? pictureUploadRequest.getPicName() : uploadPictureResult.getPicName();
+
         Picture picture = Picture.builder()
                 .url(uploadPictureResult.getUrl())
                 .name(picName)
@@ -175,9 +181,11 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
                 .picHeight(uploadPictureResult.getPicHeight())
                 .picScale(uploadPictureResult.getPicScale())
                 .picFormat(uploadPictureResult.getPicFormat())
+                // 防止不是完整的6位
+                .picColor(ColorTransformUtils.getStandardColor(uploadPictureResult.getPicColor()))
                 .userId(userId)
                 // 拿不到缩略图就拿原图
-                .thumbnailUrl(StrUtil.isNotBlank(uploadPictureResult.getThumbnailUrl())
+                .thumbnailUrl(CharSequenceUtil.isNotBlank(uploadPictureResult.getThumbnailUrl())
                         ? uploadPictureResult.getThumbnailUrl() : uploadPictureResult.getUrl())
                 // 2025.1.16 新增空间id
                 .spaceId(spaceId)
@@ -309,6 +317,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         Integer reviewStatus = pictureQueryRequest.getReviewStatus();
         String reviewMessage = pictureQueryRequest.getReviewMessage();
         Long reviewerId = pictureQueryRequest.getReviewerId();
+        Date startEditTime = pictureQueryRequest.getStartEditTime();
+        Date endEditTime = pictureQueryRequest.getEndEditTime();
         String sortField = pictureQueryRequest.getSortField();
         String sortOrder = pictureQueryRequest.getSortOrder();
         // 2025.1.16 新增对空间的处理
@@ -335,6 +345,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         queryWrapper.eq(ObjUtil.isNotEmpty(reviewerId), "reviewer_id", reviewerId);
         queryWrapper.eq(ObjUtil.isNotEmpty(spaceId), "space_id", spaceId);
         queryWrapper.isNull(nullSpaceId, "space_id");
+        queryWrapper.ge(ObjUtil.isNotEmpty(startEditTime), "edit_time", startEditTime);
+        queryWrapper.le(ObjUtil.isNotEmpty(endEditTime), "edit_time", endEditTime);
         // JSON 数组查询
         if (CollUtil.isNotEmpty(tags)) {
             /* and (tag like "%\"Java\"%" and like "%\"Python\"%") */
@@ -608,6 +620,48 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
         // 同时要清除下图片列表的缓存，因为这个时候可能已经不是这些数据了
         CacheUtil.removeCache("lin_picture:listPictureVOByPage:", 1);
+    }
+
+    @Override
+    public List<PictureVO> searchPictureByColor(Long spaceId, String picColor, User loginUser) {
+        // 1.校验参数
+        ThrowUtils.throwIf(spaceId == null || StrUtil.isBlank(picColor), ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(loginUser == null, ErrorCode.NO_AUTH_ERROR);
+        ThrowUtils.throwIf(loginUser == null, ErrorCode.PARAMS_ERROR);
+        // 2.校验空间权限
+        Space space = spaceService.getById(spaceId);
+        ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
+        spaceService.checkSpaceAuth(loginUser, space);
+        // 3.查询空间下的全部图片（必须有主色调）
+        List<Picture> pictureList = this.lambdaQuery()
+                .eq(Picture::getSpaceId, spaceId)
+                .isNotNull(Picture::getPicColor)
+                .list();
+        // 3.1 没有图片，直接返回空列表
+        if (CollUtil.isEmpty(pictureList)) {
+            return Collections.emptyList();
+        }
+        // 3.2 有图片,先将颜色字符串转为主色调
+        Color targetColor = Color.decode(picColor);
+        // 4.计算相似度，并排序
+        List<Picture> sortedPictureList = pictureList.stream()
+                .sorted(Comparator.comparingDouble(picture -> {
+                    String hexColor = picture.getPicColor();
+                    // 没有主色调的图片会默认排序到最后
+                    if (StrUtil.isBlank(hexColor)) {
+                        return Double.MAX_VALUE;
+                    }
+                    Color pictureColor = Color.decode(hexColor);
+                    // 计算相似度
+                    // 越大越相似
+                    return -ColorSimilarUtils.calculateSimilarity(targetColor, pictureColor);
+                }))
+                .limit(12) // 取前 12 个
+                .collect(Collectors.toList());
+        // 5.返回结果
+        return sortedPictureList.stream()
+                .map(PictureVO::objToVo)
+                .collect(Collectors.toList());
     }
 
 

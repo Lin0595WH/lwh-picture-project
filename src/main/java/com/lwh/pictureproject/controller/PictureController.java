@@ -1,9 +1,12 @@
 package com.lwh.pictureproject.controller;
 
+import cn.hutool.core.text.CharSequenceUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lwh.pictureproject.annotation.AuthCheck;
+import com.lwh.pictureproject.api.imagesearch.ImageSearchApiFacade;
+import com.lwh.pictureproject.api.imagesearch.model.ImageSearchResult;
 import com.lwh.pictureproject.common.BaseResponse;
 import com.lwh.pictureproject.common.DeleteRequest;
 import com.lwh.pictureproject.common.ResultUtils;
@@ -303,5 +306,36 @@ public class PictureController {
         User loginUser = userService.getLoginUser(request);
         Integer count = pictureService.uploadPictureByBatch(pictureUploadByBatchRequest, loginUser);
         return ResultUtils.success(count);
+    }
+
+    /**
+     * 以图搜图
+     */
+    @PostMapping("/search/picture")
+    public BaseResponse<List<ImageSearchResult>> searchPictureByPicture(@RequestBody SearchPictureByPictureRequest searchPictureByPictureRequest) {
+        ThrowUtils.throwIf(searchPictureByPictureRequest == null, ErrorCode.PARAMS_ERROR);
+        Long pictureId = searchPictureByPictureRequest.getPictureId();
+        ThrowUtils.throwIf(pictureId == null || pictureId <= 0, ErrorCode.PARAMS_ERROR);
+        Picture picture = pictureService.getById(pictureId);
+        ThrowUtils.throwIf(picture == null, ErrorCode.NOT_FOUND_ERROR);
+        List<ImageSearchResult> resultList = ImageSearchApiFacade.searchImage(picture.getUrl());
+        return ResultUtils.success(resultList);
+    }
+
+    /**
+     * 按照颜色搜索
+     */
+    @PostMapping("/search/color")
+    public BaseResponse<List<PictureVO>> searchPictureByColor(@RequestBody SearchPictureByColorRequest searchPictureByColorRequest,
+                                                              HttpServletRequest request) {
+        ThrowUtils.throwIf(searchPictureByColorRequest == null
+                        || searchPictureByColorRequest.getSpaceId() == null
+                        || searchPictureByColorRequest.getSpaceId() < 0
+                        || CharSequenceUtil.isBlank(searchPictureByColorRequest.getPicColor())
+                , ErrorCode.PARAMS_ERROR);
+        List<PictureVO> pictureVOList = pictureService.searchPictureByColor(searchPictureByColorRequest.getSpaceId(),
+                searchPictureByColorRequest.getPicColor(),
+                userService.getLoginUser(request));
+        return ResultUtils.success(pictureVOList);
     }
 }

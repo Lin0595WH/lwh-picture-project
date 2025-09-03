@@ -9,6 +9,7 @@ import com.lwh.pictureproject.model.entity.User;
 import com.lwh.pictureproject.model.vo.PictureVO;
 
 import javax.servlet.http.HttpServletRequest;
+import java.util.List;
 
 /**
  * @author Lin
@@ -79,4 +80,9 @@ public interface PictureService extends IService<Picture> {
      * 编辑图片（给用户用）
      */
     void editPicture(PictureEditRequest pictureEditRequest, User loginUser);
+
+    /**
+     * 根据颜色搜索图片
+     */
+    List<PictureVO> searchPictureByColor(Long spaceId, String picColor, User loginUser);
 }
