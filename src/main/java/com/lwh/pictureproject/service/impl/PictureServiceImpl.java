@@ -5,6 +5,7 @@ import cn.hutool.core.text.CharSequenceUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lwh.pictureproject.exception.BusinessException;
@@ -126,8 +127,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         }
         long spaceSize = 0L;
         // 如果是更新，判断图片是否存在
+        Picture oldPicture = null;
         if (pictureId != null) {
-            Picture oldPicture = this.getById(pictureId);
+            oldPicture = this.getById(pictureId);
             ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR, "图片不存在");
             Integer oldReviewStatus = oldPicture.getReviewStatus();
             // 不是管理员，且不是自己的图片，不能操作
@@ -194,7 +196,12 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         // 操作数据库
         // 如果 pictureId 不为空，表示更新，否则是新增
         boolean isUpdate = pictureId != null;
-        if (isUpdate) {
+        // 2025.9.8 测试发现：如果是更新的话，要提前拿到旧的图片url用于后面删除，不然更新完去拿，就变成删除新图片的
+        String oldUrl = null;
+        String oldThumbnailUrl = null;
+        if (isUpdate && oldPicture != null) {
+            oldUrl = oldPicture.getUrl();
+            oldThumbnailUrl = oldPicture.getThumbnailUrl();
             // 如果是更新，需要补充 id 和编辑时间
             picture.setId(pictureId);
             picture.setEditTime(new Date());
@@ -227,8 +234,12 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         });
         // 如果是更新的话，要把对象存储中，旧文件给删除
         if (isUpdate) {
-            String oldUrl = this.getById(pictureId).getUrl();
-            cosManager.deleteObject(oldUrl);
+            if (StringUtils.isNotBlank(oldUrl)) {
+                cosManager.deleteObject(oldUrl);
+            }
+            if (StringUtils.isNotBlank(oldThumbnailUrl) && oldThumbnailUrl.contains("_thumbnail")) {
+                cosManager.deleteObject(oldThumbnailUrl);
+            }
         }
         return PictureVO.objToVo(picture);
     }
