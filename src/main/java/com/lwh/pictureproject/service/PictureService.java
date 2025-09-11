@@ -3,6 +3,7 @@ package com.lwh.pictureproject.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.lwh.pictureproject.api.aliyunai.model.CreateOutPaintingTaskResponse;
 import com.lwh.pictureproject.model.dto.picture.*;
 import com.lwh.pictureproject.model.entity.Picture;
 import com.lwh.pictureproject.model.entity.User;
@@ -90,4 +91,9 @@ public interface PictureService extends IService<Picture> {
      * 批量编辑图片
      */
     void editPictureByBatch(PictureEditByBatchRequest pictureEditByBatchRequest, User loginUser);
+
+    /**
+     * 创建扩图任务
+     */
+    CreateOutPaintingTaskResponse createPictureOutPaintingTask(CreatePictureOutPaintingTaskRequest createPictureOutPaintingTaskRequest, User loginUser);
 }

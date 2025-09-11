@@ -8,6 +8,9 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.lwh.pictureproject.api.aliyunai.AliYunAiApi;
+import com.lwh.pictureproject.api.aliyunai.model.CreateOutPaintingTaskRequest;
+import com.lwh.pictureproject.api.aliyunai.model.CreateOutPaintingTaskResponse;
 import com.lwh.pictureproject.exception.BusinessException;
 import com.lwh.pictureproject.exception.ErrorCode;
 import com.lwh.pictureproject.exception.ThrowUtils;
@@ -70,6 +73,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
     private final SpaceService spaceService;
 
     private final TransactionTemplate transactionTemplate;
+
+    private final AliYunAiApi aliYunAiApi;
 
     /**
      * @param picture 图片
@@ -732,6 +737,31 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         PictureService pictureService = (PictureService) AopContext.currentProxy();
         boolean result = pictureService.updateBatchById(pictureList);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "批量编辑失败");
+    }
+
+    /**
+     * 创建扩图任务
+     *
+     * @param createPictureOutPaintingTaskRequest 扩图任务请求
+     * @param loginUser                           当前登录用户
+     * @return
+     */
+    @Override
+    public CreateOutPaintingTaskResponse createPictureOutPaintingTask(CreatePictureOutPaintingTaskRequest createPictureOutPaintingTaskRequest, User loginUser) {
+        // 获取图片信息
+        ThrowUtils.throwIf(ObjectUtil.hasNull(createPictureOutPaintingTaskRequest, loginUser, createPictureOutPaintingTaskRequest.getPictureId()), ErrorCode.PARAMS_ERROR);
+        Picture picture = Optional.ofNullable(this.getById(createPictureOutPaintingTaskRequest.getPictureId()))
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND_ERROR, "图片不存在"));
+        // 校验权限
+        this.checkPictureAuth(loginUser, picture);
+        // 创建扩图任务
+        CreateOutPaintingTaskRequest createOutPaintingTaskRequest = new CreateOutPaintingTaskRequest();
+        CreateOutPaintingTaskRequest.Input input = new CreateOutPaintingTaskRequest.Input();
+        input.setImageUrl(picture.getUrl());
+        createOutPaintingTaskRequest.setInput(input);
+        createOutPaintingTaskRequest.setParameters(createPictureOutPaintingTaskRequest.getParameters());
+        // 创建任务
+        return aliYunAiApi.createOutPaintingTask(createOutPaintingTaskRequest);
     }
 
     /**

@@ -5,6 +5,9 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lwh.pictureproject.annotation.AuthCheck;
+import com.lwh.pictureproject.api.aliyunai.AliYunAiApi;
+import com.lwh.pictureproject.api.aliyunai.model.CreateOutPaintingTaskResponse;
+import com.lwh.pictureproject.api.aliyunai.model.GetOutPaintingTaskResponse;
 import com.lwh.pictureproject.api.imagesearch.ImageSearchApiFacade;
 import com.lwh.pictureproject.api.imagesearch.model.ImageSearchResult;
 import com.lwh.pictureproject.common.BaseResponse;
@@ -50,6 +53,8 @@ public class PictureController {
     private final UserService userService;
 
     private final SpaceService spaceService;
+
+    private final AliYunAiApi aliYunAiApi;
 
     /**
      * 上传图片（可重新上传）
@@ -348,5 +353,32 @@ public class PictureController {
         User loginUser = userService.getLoginUser(request);
         pictureService.editPictureByBatch(pictureEditByBatchRequest, loginUser);
         return ResultUtils.success(true);
+    }
+
+    /**
+     * 创建 AI 扩图任务
+     */
+    @PostMapping("/out_painting/create_task")
+    public BaseResponse<CreateOutPaintingTaskResponse> createPictureOutPaintingTask(@RequestBody
+                                                                                    CreatePictureOutPaintingTaskRequest createPictureOutPaintingTaskRequest,
+                                                                                    HttpServletRequest request) {
+        if (createPictureOutPaintingTaskRequest == null || createPictureOutPaintingTaskRequest.getPictureId() == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        User loginUser = userService.getLoginUser(request);
+        return ResultUtils.success(pictureService.createPictureOutPaintingTask(createPictureOutPaintingTaskRequest, loginUser));
+    }
+
+    /**
+     * 查询 AI 扩图任务
+     */
+    @PostMapping("/out_painting/get_task")
+    public BaseResponse<GetOutPaintingTaskResponse> getPictureOutPaintingTask(@RequestBody String taskId) {
+        ThrowUtils.throwIf(CharSequenceUtil.isBlank(taskId), ErrorCode.PARAMS_ERROR);
+        // 去除前后的双引号
+        if (taskId.startsWith("\"") && taskId.endsWith("\"")) {
+            taskId = taskId.substring(1, taskId.length() - 1);
+        }
+        return ResultUtils.success(aliYunAiApi.getOutPaintingTask(taskId));
     }
 }
