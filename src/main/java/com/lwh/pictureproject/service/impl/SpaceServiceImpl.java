@@ -275,7 +275,7 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space> implements
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "当前空间不存在");
         }
         // 空间的用户id和当前登录用户id是否一致
-        if (!space.getUserId().equals(loginUser.getId())) {
+        if (!space.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "没有空间权限");
         }
     }
