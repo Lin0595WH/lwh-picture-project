@@ -39,13 +39,12 @@ import java.util.stream.Collectors;
  * @createDate 2025-09-15 21:51:38
  */
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = {@Lazy})
 public class SpaceUserServiceImpl extends ServiceImpl<SpaceUserMapper, SpaceUser>
         implements SpaceUserService {
 
     private final UserService userService;
 
-    @Lazy
     private final SpaceService spaceService;
 
     /**

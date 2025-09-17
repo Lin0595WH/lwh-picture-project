@@ -25,6 +25,7 @@ import com.lwh.pictureproject.service.SpaceService;
 import com.lwh.pictureproject.service.SpaceUserService;
 import com.lwh.pictureproject.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -42,7 +43,7 @@ import java.util.stream.Collectors;
  * @createDate 2025-01-13 20:54:30
  */
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = {@Lazy})
 public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space> implements SpaceService {
 
     private final UserService userService;
@@ -51,7 +52,10 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space> implements
 
     private final ConcurrentHashMap<Long, Object> lockMap = new ConcurrentHashMap<>();
 
+
     private final SpaceUserService spaceUserService;
+
+    //private final DynamicShardingManager dynamicShardingManager;
 
     /**
      * @param spaceAddRequest 创建空间请求
@@ -112,6 +116,10 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space> implements
                             spaceUser.setSpaceRole(SpaceRoleEnum.ADMIN.getValue());
                             result = spaceUserService.save(spaceUser);
                             ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "创建团队成员记录失败");
+                            // 团队空间 且 旗舰版，那么需要动态创建一张图片空间表
+                            if (SpaceLevelEnum.FLAGSHIP.getValue() == space.getSpaceLevel()) {
+                                //dynamicShardingManager.createSpacePictureTable(space);
+                            }
                         }
                         // 返回新写入的数据 id
                         return space.getId();
@@ -298,6 +306,7 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space> implements
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "没有空间权限");
         }
     }
+
 }
 
 
