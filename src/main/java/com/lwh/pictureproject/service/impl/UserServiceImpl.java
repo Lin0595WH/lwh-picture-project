@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lwh.pictureproject.constant.UserConstant;
 import com.lwh.pictureproject.exception.ErrorCode;
 import com.lwh.pictureproject.exception.ThrowUtils;
+import com.lwh.pictureproject.manager.auth.StpKit;
 import com.lwh.pictureproject.mapper.UserMapper;
 import com.lwh.pictureproject.model.dto.user.UserLoginRequest;
 import com.lwh.pictureproject.model.dto.user.UserQueryRequest;
@@ -105,7 +106,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         ThrowUtils.throwIf(!encryptPassword.equals(user.getUserPassword()), ErrorCode.PARAMS_ERROR, "用户不存在或密码错误！");
         // 英文存比较省空间
         log.error("User login failed: Incorrect password！");
+        // 4.保存用户的登录态
         request.getSession().setAttribute(UserConstant.USER_LOGIN_STATE, user);
+        // 2025.9.16 使用sa-token 校验团队空间的成员权限，所以这里同时要往StpKit的SPACE的session中保存用户信息
+        // 注意保证该用户信息与 SpringSession 中的信息过期时间一致
+        StpKit.SPACE.login(user.getId());
+        StpKit.SPACE.getSession().set(UserConstant.USER_LOGIN_STATE, user);
         return this.getLoginUserVO(user);
     }
 

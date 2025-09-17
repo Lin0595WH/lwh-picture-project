@@ -580,7 +580,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         Picture oldPicture = this.getById(deletePictureId);
         ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR);
         // 2025.1.16 加入了空间的概念，这里的权限判断要改下，改为用checkSpaceAuth判断权限
-        this.checkPictureAuth(loginUser, oldPicture);
+        // 2025.9.17 已经改为注解鉴权
+        // this.checkPictureAuth(loginUser, oldPicture);
         // 2025.1.16 加了空间，删除时除了要删除图片，还有更新空间的条数和大小，所以要加事务控制
         Long spaceId = oldPicture.getSpaceId();
         transactionTemplate.execute(status -> {
@@ -635,7 +636,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         Picture oldPicture = this.getById(id);
         ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR);
         // 2025.1.16 加入了空间的概念，这里的权限判断要改下，改为用checkSpaceAuth判断权限
-        this.checkPictureAuth(loginUser, oldPicture);
+        // 2025.9.17 已经改为注解鉴权
+        //this.checkPictureAuth(loginUser, oldPicture);
         // 2024.12.27 加入审核部分的判断
         this.fillReviewParams(picture, loginUser);
         // 操作数据库
@@ -760,7 +762,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         Picture picture = Optional.ofNullable(this.getById(createPictureOutPaintingTaskRequest.getPictureId()))
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND_ERROR, "图片不存在"));
         // 校验权限
-        this.checkPictureAuth(loginUser, picture);
+        // 2025.9.17 已经改为注解鉴权
+        //this.checkPictureAuth(loginUser, picture);
         // 加入使用次数限制
         Long dailyLimit = 10L;
         if (!userService.isAdmin(loginUser)) {

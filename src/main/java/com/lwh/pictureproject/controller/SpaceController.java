@@ -9,6 +9,7 @@ import com.lwh.pictureproject.constant.UserConstant;
 import com.lwh.pictureproject.exception.BusinessException;
 import com.lwh.pictureproject.exception.ErrorCode;
 import com.lwh.pictureproject.exception.ThrowUtils;
+import com.lwh.pictureproject.manager.auth.SpaceUserAuthManager;
 import com.lwh.pictureproject.model.dto.space.*;
 import com.lwh.pictureproject.model.entity.Space;
 import com.lwh.pictureproject.model.entity.User;
@@ -45,6 +46,8 @@ public class SpaceController {
     private final UserService userService;
 
     private final SpaceService spaceService;
+
+    private final SpaceUserAuthManager spaceUserAuthManager;
 
     /**
      * 新增一个空间
@@ -90,12 +93,10 @@ public class SpaceController {
      * 更新空间（仅管理员可用）
      *
      * @param spaceUpdateRequest 空间更新请求
-     * @param request            网络请求
      */
     @PostMapping("/update")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<Boolean> updateSpace(@RequestBody SpaceUpdateRequest spaceUpdateRequest,
-                                             HttpServletRequest request) {
+    public BaseResponse<Boolean> updateSpace(@RequestBody SpaceUpdateRequest spaceUpdateRequest) {
         if (spaceUpdateRequest == null || spaceUpdateRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
@@ -120,11 +121,10 @@ public class SpaceController {
      * 根据 id 获取空间（仅管理员可用）
      *
      * @param id      空间 id
-     * @param request 网络请求
      */
     @PostMapping("/get")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<Space> getSpaceById(long id, HttpServletRequest request) {
+    public BaseResponse<Space> getSpaceById(long id) {
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
         // 查询数据库
         Space space = spaceService.getById(id);
@@ -143,7 +143,11 @@ public class SpaceController {
         Space space = spaceService.getById(id);
         ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR);
         // 获取封装类
-        return ResultUtils.success(spaceService.getSpaceVO(space, request));
+        SpaceVO spaceVO = spaceService.getSpaceVO(space);
+        // 2025.9.17 给前端多返回一个权限列表
+        List<String> permissionList = spaceUserAuthManager.getPermissionList(space, userService.getLoginUser(request));
+        spaceVO.setPermissionList(permissionList);
+        return ResultUtils.success(spaceVO);
     }
 
     /**
