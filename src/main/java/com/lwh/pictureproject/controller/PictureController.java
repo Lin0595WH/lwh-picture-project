@@ -180,7 +180,7 @@ public class PictureController {
         // 2025.9.17 给前端多返回一个权限列表
         List<String> permissionList = spaceUserAuthManager.getPermissionList(space, userService.getLoginUser(request));
         pictureVO.setPermissionList(permissionList);
-        return ResultUtils.success(pictureService.getPictureVO(picture, request));
+        return ResultUtils.success(pictureVO);
     }
 
     /**

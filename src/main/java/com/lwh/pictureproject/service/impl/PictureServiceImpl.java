@@ -124,7 +124,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
             Space space = spaceService.getById(spaceId);
             ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR, "当前空间不存在");
             // 新增校验是否有空间权限,仅创建空间的用户可以上传
-            spaceService.checkSpaceAuth(loginUser, space);
+            // 2025.9.18 有了团队空间，用了sa-token鉴权，这里就不用了
+            //spaceService.checkSpaceAuth(loginUser, space);
             // 校验额度
             ThrowUtils.throwIf(space.getTotalCount() >= space.getMaxCount(), ErrorCode.OPERATION_ERROR, "剩余空间条数不足");
             // 校验空间大小
@@ -145,8 +146,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
             ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR, "图片不存在");
             Integer oldReviewStatus = oldPicture.getReviewStatus();
             // 不是管理员，且不是自己的图片，不能操作
-            boolean noAuth = !Objects.equals(oldPicture.getUserId(), userId) && !isAdmin;
-            ThrowUtils.throwIf(noAuth, ErrorCode.NO_AUTH_ERROR, "无权限操作该图片");
+            // 2025.9.18 有了团队空间，用了sa-token鉴权，这里就不用了
+            //boolean noAuth = !Objects.equals(oldPicture.getUserId(), userId) && !isAdmin;
+            //ThrowUtils.throwIf(noAuth, ErrorCode.NO_AUTH_ERROR, "无权限操作该图片");
             ThrowUtils.throwIf(oldReviewStatus == PictureReviewStatusEnum.REVIEWING.getValue(),
                     ErrorCode.OPERATION_ERROR, "图片正在审核中，请勿重复操作");
             // 2025.1.16 更新时，更新的空间id 也要跟原本的一致才行哦
@@ -664,7 +666,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         // 2.校验空间权限
         Space space = spaceService.getById(spaceId);
         ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
-        spaceService.checkSpaceAuth(loginUser, space);
+        // 2025.9.18 用了统一的sa-token鉴权，这里就不用了
+        //spaceService.checkSpaceAuth(loginUser, space);
         // 3.查询空间下的全部图片（必须有主色调）
         List<Picture> pictureList = this.lambdaQuery()
                 .eq(Picture::getSpaceId, spaceId)

@@ -184,7 +184,23 @@ public class StpInterfaceImpl implements StpInterface {
         // 这里对应post请求。因为本项目统统都是post，所以应该都是走这里
         if (ContentType.JSON.getValue().equals(contentType)) {
             String body = ServletUtil.getBody(request);
-            authRequest = JSONUtil.toBean(body, SpaceUserAuthContext.class);
+            // 先尝试把请求体转为SpaceUserAuthContext对象
+            try {
+                // 先尝试直接转换为SpaceUserAuthContext对象
+                authRequest = JSONUtil.toBean(body, SpaceUserAuthContext.class);
+            } catch (Exception e) {
+                // 转换失败:可能是因为我把全部请求都转post了，但是想getXXXById这种，他请求体就一个id字符串，所以不是标准json格式
+                // 尝试转换为long类型的id
+                try {
+                    long id = Long.parseLong(body.trim());
+                    // 创建新的SpaceUserAuthContext并设置id
+                    authRequest = new SpaceUserAuthContext();
+                    authRequest.setId(id); // 假设存在setId方法
+                } catch (NumberFormatException ex) {
+                    // 两种转换都失败，根据需要处理异常
+                    throw new IllegalArgumentException("无法将请求体转换为SpaceUserAuthContext或有效的ID", ex);
+                }
+            }
         }
         // 对应get请求
         else {

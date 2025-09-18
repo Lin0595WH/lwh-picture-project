@@ -196,12 +196,11 @@ public class SpaceUserServiceImpl extends ServiceImpl<SpaceUserMapper, SpaceUser
         Long spaceId = spaceUserQueryRequest.getSpaceId();
         Long userId = spaceUserQueryRequest.getUserId();
         String spaceRole = spaceUserQueryRequest.getSpaceRole();
-        SpaceRoleEnum spaceRoleEnum = EnumUtil.getBy(SpaceRoleEnum::getValue, spaceRole);
         // 3.创建查询条件
         queryWrapper.eq(ObjectUtil.isNotEmpty(id), SpaceUser::getId, id);
         queryWrapper.eq(ObjectUtil.isNotEmpty(spaceId), SpaceUser::getSpaceId, spaceId);
         queryWrapper.eq(ObjectUtil.isNotEmpty(userId), SpaceUser::getUserId, userId);
-        queryWrapper.eq(ObjectUtil.isAllNotEmpty(spaceRole, spaceRoleEnum), SpaceUser::getSpaceRole, spaceRoleEnum.getValue());
+        queryWrapper.eq(ObjectUtil.isNotEmpty(spaceRole), SpaceUser::getSpaceRole, spaceRole);
         return queryWrapper;
     }
 }
