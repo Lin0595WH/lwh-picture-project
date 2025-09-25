@@ -1,6 +1,8 @@
 package com.lwh.pictureproject.manager.websocket.strategy.impl;
 
 
+import com.lwh.pictureproject.exception.ErrorCode;
+import com.lwh.pictureproject.exception.ThrowUtils;
 import com.lwh.pictureproject.manager.websocket.model.PictureEditRequestMessage;
 import com.lwh.pictureproject.manager.websocket.model.PictureEditResponseMessage;
 import com.lwh.pictureproject.manager.websocket.model.enums.PictureEditMessageTypeEnum;
@@ -40,7 +42,9 @@ public class EnterEditMessageStrategy implements PictureEditMessageStrategy {
         // 当前图片没人编辑，才可以进入编辑
         if (!pictureEditingStatusManager.isBeingEdited(pictureId)) {
             // 更新当前图片的编辑状态
-            pictureEditingStatusManager.setEditingUser(pictureId, userVO.getId());
+            Long editingUserId = pictureEditingStatusManager.setEditingUser(pictureId, userVO.getId());
+            ThrowUtils.throwIf(editingUserId != null && !editingUserId.equals(userVO.getId()),
+                    ErrorCode.OPERATION_ERROR, "图片正在被其他用户编辑中");
             // 构造响应，发送进入编辑的消息通知
             PictureEditResponseMessage pictureEditResponseMessage = new PictureEditResponseMessage();
             pictureEditResponseMessage.setType(PictureEditMessageTypeEnum.ENTER_EDIT.getValue());

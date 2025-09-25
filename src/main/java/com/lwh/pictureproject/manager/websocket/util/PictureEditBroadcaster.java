@@ -2,6 +2,7 @@ package com.lwh.pictureproject.manager.websocket.util;
 
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.ObjectUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
@@ -49,6 +50,31 @@ public class PictureEditBroadcaster {
             sessionSet.remove(session);
             if (sessionSet.isEmpty()) {
                 pictureSessions.remove(pictureId);
+            }
+        }
+    }
+
+    /**
+     * @param pictureEditResponseMessage 要返回的图片编辑响应消息
+     * @param specifySession             指定Session
+     * @Descriptions 广播给指定会话
+     * @Date 2025/9/19 21:28
+     * @Author Lin
+     */
+    public void broadcastToPicture(PictureEditResponseMessage pictureEditResponseMessage, WebSocketSession specifySession) throws IOException {
+        if (ObjectUtil.isNotNull(specifySession)) {
+            // 创建 ObjectMapper
+            ObjectMapper objectMapper = new ObjectMapper();
+            // 配置序列化：将 Long 类型转为 String，解决丢失精度问题（PictureEditResponseMessage : UserVO ：id ：long)
+            SimpleModule module = new SimpleModule();
+            module.addSerializer(Long.class, ToStringSerializer.instance);
+            module.addSerializer(Long.TYPE, ToStringSerializer.instance); // 支持 long 基本类型
+            objectMapper.registerModule(module);
+            // 序列化为 JSON 字符串
+            String message = objectMapper.writeValueAsString(pictureEditResponseMessage);
+            TextMessage textMessage = new TextMessage(message);
+            if (specifySession.isOpen()) {
+                specifySession.sendMessage(textMessage);
             }
         }
     }

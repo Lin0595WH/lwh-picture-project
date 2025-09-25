@@ -9,6 +9,7 @@ import com.lwh.pictureproject.manager.websocket.model.enums.PictureEditMessageTy
 import com.lwh.pictureproject.manager.websocket.strategy.PictureEditMessageStrategy;
 import com.lwh.pictureproject.manager.websocket.strategy.PictureEditMessageStrategyFactory;
 import com.lwh.pictureproject.manager.websocket.util.PictureEditBroadcaster;
+import com.lwh.pictureproject.manager.websocket.util.PictureEditingStatusManager;
 import com.lwh.pictureproject.model.entity.User;
 import com.lwh.pictureproject.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,8 @@ public class PictureEditHandler extends TextWebSocketHandler {
     private final UserService userService;
 
     private final PictureEditBroadcaster pictureEditBroadcaster;
+
+    private final PictureEditingStatusManager pictureEditingStatusManager;
 
     private final PictureEditEventProducer pictureEditEventProducer;
 
@@ -57,6 +60,19 @@ public class PictureEditHandler extends TextWebSocketHandler {
         pictureEditResponseMessage.setUser(userService.getUserVO(user));
         // 广播给所有用户
         pictureEditBroadcaster.broadcastToPicture(pictureId, pictureEditResponseMessage);
+        // 如果是后面进来的，这里就可以把当前正在编辑的用户信息给当前用户
+        Long editingUserId = pictureEditingStatusManager.getEditingUser(pictureId);
+        if (editingUserId != null) {
+            User editingUser = userService.getById(editingUserId);
+            if (editingUser != null) {
+                PictureEditResponseMessage editingMsg = new PictureEditResponseMessage();
+                editingMsg.setType(PictureEditMessageTypeEnum.ENTER_EDIT.getValue());
+                String message2 = String.format("用户 %s 正在编辑图片", editingUser.getUserName());
+                editingMsg.setMessage(message2);
+                editingMsg.setUser(userService.getUserVO(editingUser));
+                pictureEditBroadcaster.broadcastToPicture(editingMsg, session);
+            }
+        }
     }
 
     /**

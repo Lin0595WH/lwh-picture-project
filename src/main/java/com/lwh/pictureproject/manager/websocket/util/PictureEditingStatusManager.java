@@ -40,8 +40,8 @@ public class PictureEditingStatusManager {
      * @param pictureId 图片 ID
      * @param userId    用户 ID
      */
-    public void setEditingUser(Long pictureId, Long userId) {
-        pictureEditingUsers.put(pictureId, userId);
+    public Long setEditingUser(Long pictureId, Long userId) {
+        return pictureEditingUsers.putIfAbsent(pictureId, userId);
     }
 
     /**
