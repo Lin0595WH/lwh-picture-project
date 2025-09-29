@@ -165,7 +165,6 @@
                 <version>${spring-boot.version}</version>
                 <configuration>
                     <mainClass>com.lwh.pictureproject.LwhPictureProjectApplication</mainClass>
-                    <skip>true</skip>
                 </configuration>
                 <executions>
                     <execution>
