@@ -2,6 +2,7 @@ package com.lwh.pictureproject.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.lwh.pictureproject.model.entity.Picture;
+import org.apache.ibatis.annotations.Select;
 
 /**
  * @author Lin
@@ -11,6 +12,8 @@ import com.lwh.pictureproject.model.entity.Picture;
  */
 public interface PictureMapper extends BaseMapper<Picture> {
 
+    @Select("SELECT space_id FROM picture WHERE id = #{pictureId} AND is_delete = 0")
+    Long getSpaceIdById(Long pictureId);
 }
 
 

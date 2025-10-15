@@ -17,6 +17,22 @@ spring:
   servlet:
     multipart:
       max-file-size: 10MB
+  # 邮箱配置
+  mail:
+    host: smtp.qq.com
+    port: 465
+    username: lin_weiheng@foxmail.com
+    password: adyddcwiszalbgjc
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          ssl:
+            enable: true
+    default-encoding: utf-8
+
   # 空间图片分表
   shardingsphere:
     datasource:
@@ -65,3 +81,9 @@ knife4j:
         api-rule: package
         api-rule-resources:
           - com.lwh.pictureproject.controller
+# 邮箱注册
+email:
+  verification:
+    code-expire-minutes: 5 # 验证码过期时间（分钟）
+    code-length: 6 # 验证码长度
+    max-attempts-per-hour: 5

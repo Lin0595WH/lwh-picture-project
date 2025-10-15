@@ -23,8 +23,7 @@ public class ImageSearchApiFacade {
     public static List<ImageSearchResult> searchImage(String imageUrl) {
         String imagePageUrl = GetImagePageUrlApi.getImagePageUrl(imageUrl);
         String imageFirstUrl = GetImageFirstUrlApi.getImageFirstUrl(imagePageUrl);
-        List<ImageSearchResult> imageList = GetImageListApi.getImageList(imageFirstUrl);
-        return imageList;
+        return GetImageListApi.getImageList(imageFirstUrl);
     }
 
     public static void main(String[] args) {

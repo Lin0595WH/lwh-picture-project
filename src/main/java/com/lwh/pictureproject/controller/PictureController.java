@@ -13,6 +13,7 @@ import com.lwh.pictureproject.api.imagesearch.model.ImageSearchResult;
 import com.lwh.pictureproject.common.BaseResponse;
 import com.lwh.pictureproject.common.DeleteRequest;
 import com.lwh.pictureproject.common.ResultUtils;
+import com.lwh.pictureproject.config.CacheConfig;
 import com.lwh.pictureproject.constant.UserConstant;
 import com.lwh.pictureproject.exception.BusinessException;
 import com.lwh.pictureproject.exception.ErrorCode;
@@ -26,14 +27,16 @@ import com.lwh.pictureproject.model.entity.Picture;
 import com.lwh.pictureproject.model.entity.Space;
 import com.lwh.pictureproject.model.entity.User;
 import com.lwh.pictureproject.model.enums.PictureReviewStatusEnum;
-import com.lwh.pictureproject.model.vo.PictureTagCategory;
+import com.lwh.pictureproject.model.vo.PictureTagCategoryVO;
 import com.lwh.pictureproject.model.vo.PictureVO;
 import com.lwh.pictureproject.service.PictureService;
+import com.lwh.pictureproject.service.PictureTagCategoryService;
 import com.lwh.pictureproject.service.SpaceService;
 import com.lwh.pictureproject.service.UserService;
 import com.lwh.pictureproject.util.CacheUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.util.DigestUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -57,6 +60,8 @@ public class PictureController {
     private final UserService userService;
 
     private final SpaceService spaceService;
+
+    private final PictureTagCategoryService pictureTagCategoryService;
 
     private final AliYunAiApi aliYunAiApi;
 
@@ -226,6 +231,8 @@ public class PictureController {
             //    throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "没有空间权限");
             //}
         }
+        // 2024.12.27 加了审核逻辑，所以普通用户只能看审核通过的图片
+        pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
         // 查询数据库
         Page<Picture> picturePage = pictureService.page(new Page<>(current, size),
                 pictureService.getQueryWrapper(pictureQueryRequest));
@@ -235,6 +242,7 @@ public class PictureController {
 
     /**
      * 分页获取图片列表（封装类）(使用缓存版)
+     *
      * @deprecated 缓存已弃用
      */
     @Deprecated
@@ -304,14 +312,13 @@ public class PictureController {
         return ResultUtils.success(true);
     }
 
+    /**
+     * 获取图片标签分类
+     */
     @PostMapping("/tag_category")
-    public BaseResponse<PictureTagCategory> listPictureTagCategory() {
-        PictureTagCategory pictureTagCategory = new PictureTagCategory();
-        List<String> tagList = List.of("热门", "搞笑", "生活", "高清", "艺术", "校园", "背景", "简历", "创意");
-        List<String> categoryList = List.of("模板", "电商", "表情包", "素材", "海报");
-        pictureTagCategory.setTagList(tagList);
-        pictureTagCategory.setCategoryList(categoryList);
-        return ResultUtils.success(pictureTagCategory);
+    @Cacheable(value = CacheConfig.CACHE_PICTURE_TAG_CATEGORY, key = "'all'")
+    public BaseResponse<PictureTagCategoryVO> listPictureTagCategory() {
+        return ResultUtils.success(pictureTagCategoryService.getPictureTagCategoryVO());
     }
 
     /**

@@ -2,6 +2,8 @@ package com.lwh.pictureproject.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.date.DateUtil;
+import cn.hutool.core.lang.Validator;
+import cn.hutool.core.text.CharSequenceUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lwh.pictureproject.annotation.AuthCheck;
@@ -12,6 +14,9 @@ import com.lwh.pictureproject.constant.UserConstant;
 import com.lwh.pictureproject.exception.BusinessException;
 import com.lwh.pictureproject.exception.ErrorCode;
 import com.lwh.pictureproject.exception.ThrowUtils;
+import com.lwh.pictureproject.manager.captcha.CaptchaManager;
+import com.lwh.pictureproject.manager.captcha.EmailService;
+import com.lwh.pictureproject.manager.captcha.model.dto.EmailRequest;
 import com.lwh.pictureproject.model.dto.user.*;
 import com.lwh.pictureproject.model.entity.User;
 import com.lwh.pictureproject.model.vo.LoginUserVO;
@@ -38,7 +43,12 @@ import java.util.List;
 @RequestMapping("/user")
 @RequiredArgsConstructor
 public class UserController {
+
     private final UserService userService;
+
+    private final CaptchaManager captchaManager;
+
+    private final EmailService emailService;
 
     /**
      * 用户注册
@@ -171,5 +181,24 @@ public class UserController {
         // 将转换后的用户视图对象列表设置到用户视图分页对象中
         userVOPage.setRecords(userVOList);
         return ResultUtils.success(userVOPage);
+    }
+
+    /**
+     * 发送验证码
+     */
+    @PostMapping("/send/captcha")
+    public BaseResponse<Boolean> sendCaptcha(@RequestBody EmailRequest request) {
+        String email = request.getEmail();
+        ThrowUtils.throwIf(CharSequenceUtil.isBlank(email), ErrorCode.PARAMS_ERROR, "邮箱不能为空");
+        ThrowUtils.throwIf(!Validator.isEmail(email), ErrorCode.PARAMS_ERROR, "邮箱格式错误！");
+        // 限流检查
+        ThrowUtils.throwIf(!captchaManager.isAllowedToSend(email), ErrorCode.OPERATION_ERROR, "发送次数过多，请稍后再试！");
+        // 生成验证码
+        String code = captchaManager.generateCode();
+        // 保存到Redis
+        captchaManager.saveVerificationCode(email, code);
+        // 发送邮件
+        emailService.sendCaptcha(email, code);
+        return ResultUtils.success(true);
     }
 }

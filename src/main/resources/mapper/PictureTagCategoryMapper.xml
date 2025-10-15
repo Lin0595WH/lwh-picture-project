@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lwh.pictureproject.mapper.PictureTagCategoryMapper">
+
+    <resultMap id="BaseResultMap" type="com.lwh.pictureproject.model.entity.PictureTagCategory">
+        <id property="id" column="id"/>
+        <result property="type" column="type"/>
+        <result property="name" column="name"/>
+        <result property="sortNum" column="sort_num"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,type,name,sort_num
+    </sql>
+</mapper>

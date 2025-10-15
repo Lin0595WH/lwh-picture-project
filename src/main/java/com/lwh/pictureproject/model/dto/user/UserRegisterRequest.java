@@ -29,4 +29,20 @@ public class UserRegisterRequest implements Serializable {
      * 确认密码
      */
     private String checkPassword;
+
+    /**
+     * 用户昵称
+     */
+    private String userName;
+
+    /**
+     * 邮箱
+     */
+    private String email;
+
+    /**
+     * 验证码
+     */
+    private String captcha;
+
 }

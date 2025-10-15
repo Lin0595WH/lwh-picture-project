@@ -43,7 +43,6 @@ import org.jsoup.select.Elements;
 import org.springframework.aop.framework.AopContext;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -55,6 +54,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -149,6 +149,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
             // 2025.9.18 有了团队空间，用了sa-token鉴权，这里就不用了
             //boolean noAuth = !Objects.equals(oldPicture.getUserId(), userId) && !isAdmin;
             //ThrowUtils.throwIf(noAuth, ErrorCode.NO_AUTH_ERROR, "无权限操作该图片");
+            // 2025.10.13 这里应该只有公共图库的要审核
             ThrowUtils.throwIf(oldReviewStatus == PictureReviewStatusEnum.REVIEWING.getValue(),
                     ErrorCode.OPERATION_ERROR, "图片正在审核中，请勿重复操作");
             // 2025.1.16 更新时，更新的空间id 也要跟原本的一致才行哦
@@ -426,12 +427,28 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         if (isAdmin) {
             // 管理员审核
             picture.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
-            picture.setReviewMessage("管理员审核通过");
+            picture.setReviewMessage("管理员自动审核通过");
             picture.setReviewerId(loginUser.getId());
             picture.setReviewTime(new Date());
         } else {
-            // 非管理员,上传或者编辑，都是需要审核的
-            picture.setReviewStatus(PictureReviewStatusEnum.REVIEWING.getValue());
+            Long spaceId = picture.getSpaceId();
+            // 这里的null不能完全信，有的地方是空间图片，但是没传spaceId，所以要再去库里在捞下
+            if (spaceId == null) {
+                spaceId = baseMapper.getSpaceIdById(picture.getId());
+            }
+            // 这个时候还是null，那真是公共图库的了
+            // 公共空间图片，才需要审核
+            if (spaceId == null) {
+                // 非管理员,上传或者编辑，都是需要审核的
+                picture.setReviewStatus(PictureReviewStatusEnum.REVIEWING.getValue());
+            } else {
+                // 私人空间的图片，不审核
+                picture.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
+                picture.setReviewMessage("空间图片暂不需要审核");
+                picture.setReviewerId(loginUser.getId());
+                picture.setReviewTime(new Date());
+            }
+
         }
     }
 
@@ -510,7 +527,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
      * @date: 2025/1/7 21:48
      * @return: void
      **/
-    @Async
+    @Async("myAsyncExecutor")
     @Override
     public void clearPictureFile(Picture picture) {
         // 校验
@@ -768,36 +785,26 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         // 2025.9.17 已经改为注解鉴权
         //this.checkPictureAuth(loginUser, picture);
         // 加入使用次数限制
-        Long dailyLimit = 10L;
+        long dailyLimit = 3L;
+        Long count;
         if (!userService.isAdmin(loginUser)) {
             String date = DateUtil.today();
             String redisKey = "out_painting:limit:" + loginUser.getId() + ":" + date;
-            Long count = null;
             try {
-                LocalDateTime now = LocalDateTime.now();
-                LocalDateTime midnight = now.toLocalDate().plusDays(1).atStartOfDay();
-                long secondsUntilMidnight = Duration.between(now, midnight).getSeconds();
+                count = stringRedisTemplate.opsForValue().increment(redisKey);
+                // 如果是第一次设置，添加过期时间
+                if (count != null && count == 1) {
+                    LocalDateTime now = LocalDateTime.now();
+                    LocalDateTime midnight = now.toLocalDate().plusDays(1).atStartOfDay();
+                    long secondsUntilMidnight = Duration.between(now, midnight).getSeconds();
+                    stringRedisTemplate.expire(redisKey, secondsUntilMidnight, TimeUnit.SECONDS);
+                }
 
-                String luaScript =
-                        "local count = redis.call('incr', KEYS[1]) " +
-                                "if count == 1 then " +
-                                "   redis.call('expire', KEYS[1], ARGV[1]) " +
-                                "end " +
-                                "return count";
-
-                count = stringRedisTemplate.execute(
-                        new DefaultRedisScript<>(luaScript, Long.class),
-                        Collections.singletonList(redisKey),
-                        String.valueOf(secondsUntilMidnight)
-                );
             } catch (Exception e) {
                 log.error("Redis限流操作失败", e);
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, "系统繁忙，请稍后重试");
             }
-            if (count == null) {
-                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "系统繁忙，请稍后重试");
-            }
-            if (count > dailyLimit) {
+            if (count != null && count > dailyLimit) {
                 throw new BusinessException(ErrorCode.OPERATION_ERROR,
                         "每日AI扩图功能最多使用" + dailyLimit + "次，请明天再试");
             }

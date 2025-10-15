@@ -1,14 +1,18 @@
 package com.lwh.pictureproject.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
-import cn.hutool.core.util.ObjUtil;
-import cn.hutool.core.util.StrUtil;
+import cn.hutool.core.lang.Validator;
+import cn.hutool.core.text.CharSequenceUtil;
+import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.ReUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lwh.pictureproject.constant.UserConstant;
 import com.lwh.pictureproject.exception.ErrorCode;
 import com.lwh.pictureproject.exception.ThrowUtils;
 import com.lwh.pictureproject.manager.auth.StpKit;
+import com.lwh.pictureproject.manager.captcha.CaptchaManager;
 import com.lwh.pictureproject.mapper.UserMapper;
 import com.lwh.pictureproject.model.dto.user.UserLoginRequest;
 import com.lwh.pictureproject.model.dto.user.UserQueryRequest;
@@ -18,6 +22,7 @@ import com.lwh.pictureproject.model.enums.UserRoleEnum;
 import com.lwh.pictureproject.model.vo.LoginUserVO;
 import com.lwh.pictureproject.model.vo.UserVO;
 import com.lwh.pictureproject.service.UserService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
@@ -33,9 +38,15 @@ import java.util.stream.Collectors;
  * @description 针对表【user(用户)】的数据库操作Service实现
  * @createDate 2024-12-18 20:48:00
  */
-@Service
 @Slf4j
+@Service
+@RequiredArgsConstructor
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
+
+    // 正则表达式：仅允许中英文、数字
+    private static final String VALID_PATTERN = "^[a-zA-Z0-9\u4e00-\u9fa5]+$";
+
+    private final CaptchaManager captchaManager;
 
     /**
      * @param userRegisterRequest 用户注册请求类
@@ -46,32 +57,41 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
      **/
     @Override
     public long userRegister(UserRegisterRequest userRegisterRequest) {
+        // 用户昵称
+        String userName = userRegisterRequest.getUserName();
         // 用户账号
         String userAccount = userRegisterRequest.getUserAccount();
         // 密码
         String userPassword = userRegisterRequest.getUserPassword();
         // 确认密码
         String checkPassword = userRegisterRequest.getCheckPassword();
-        // 1.校验
-        ThrowUtils.throwIf(StrUtil.hasBlank(userAccount, userPassword, checkPassword), ErrorCode.PARAMS_ERROR, "参数为空!");
-        ThrowUtils.throwIf(userAccount.length() < 4, ErrorCode.PARAMS_ERROR, "账号长度小于4！");
-        ThrowUtils.throwIf(userPassword.length() < 8 || checkPassword.length() < 8, ErrorCode.PARAMS_ERROR, "用户密码过短!");
-        ThrowUtils.throwIf(userAccount.contains(" ") || userPassword.contains(" ") || checkPassword.contains(" "),
-                ErrorCode.PARAMS_ERROR, "用户账号/密码/确认密码不能包含空格！");
-        ThrowUtils.throwIf(!userPassword.equals(checkPassword), ErrorCode.PARAMS_ERROR, "两次输入的密码不一致!");
+        // 邮箱
+        String email = userRegisterRequest.getEmail();
+        // 验证码
+        String captcha = userRegisterRequest.getCaptcha();
+        // 校验
+        this.userRegisterVerify(userName, userAccount, userPassword, checkPassword, email, captcha);
+        // 校验验证码
+        ThrowUtils.throwIf(!captchaManager.verifyCode(email, captcha), ErrorCode.PARAMS_ERROR, "验证码错误！");
         // 2.校验用户账号是否重复
-        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("user_account", userAccount);
+        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(User::getUserAccount, userAccount);
         long count = this.count(queryWrapper);
         ThrowUtils.throwIf(count > 0, ErrorCode.PARAMS_ERROR, "账号重复！");
+        // 校验邮箱是否重复
+        queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(User::getEmail, email);
+        count = this.count(queryWrapper);
+        ThrowUtils.throwIf(count > 0, ErrorCode.PARAMS_ERROR, "该邮箱已被注册使用！");
         // 3.加密密码
         String encryptPassword = this.getEncryptPassword(userPassword);
         // 4.插入数据
         User user = User.builder()
-                .userName("默认名称")
+                .userName(userName)
                 .userAccount(userAccount)
                 .userPassword(encryptPassword)
                 .userRole(UserRoleEnum.USER.getValue())
+                .email(email)
                 .build();
         boolean save = this.save(user);
         ThrowUtils.throwIf(!save, ErrorCode.SYSTEM_ERROR, "用户注册失败");
@@ -92,7 +112,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         ThrowUtils.throwIf(userLoginRequest == null, ErrorCode.PARAMS_ERROR, "参数为空！");
         String userAccount = userLoginRequest.getUserAccount();
         String userPassword = userLoginRequest.getUserPassword();
-        ThrowUtils.throwIf(StrUtil.hasBlank(userAccount, userPassword), ErrorCode.PARAMS_ERROR, "参数为空！");
+        ThrowUtils.throwIf(CharSequenceUtil.hasBlank(userAccount, userPassword), ErrorCode.PARAMS_ERROR, "参数为空！");
         ThrowUtils.throwIf(userAccount.length() < 4 || userPassword.length() < 8, ErrorCode.PARAMS_ERROR, "账号/密码错误！");
         // 2.查询用户是否存在
         User user = this.getOne(new QueryWrapper<User>().eq("user_account", userAccount), false);
@@ -221,17 +241,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         String userAccount = userQueryRequest.getUserAccount();
         String userProfile = userQueryRequest.getUserProfile();
         String userRole = userQueryRequest.getUserRole();
-        int pageSize = userQueryRequest.getPageSize();
         String sortField = userQueryRequest.getSortField();
         String sortOrder = userQueryRequest.getSortOrder();
         // 2.开始构造查询条件
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq(ObjUtil.isNotNull(id), "id", id);
-        queryWrapper.eq(StrUtil.isNotBlank(userRole), "user_role", userRole);
-        queryWrapper.like(StrUtil.isNotBlank(userAccount), "user_account", userAccount);
-        queryWrapper.like(StrUtil.isNotBlank(userName), "user_name", userName);
-        queryWrapper.like(StrUtil.isNotBlank(userProfile), "user_profile", userProfile);
-        queryWrapper.orderBy(StrUtil.isNotEmpty(sortField), sortOrder.equals("ascend"), sortField);
+        queryWrapper.eq(ObjectUtil.isNotNull(id), "id", id);
+        queryWrapper.eq(CharSequenceUtil.isNotBlank(userRole), "user_role", userRole);
+        queryWrapper.like(CharSequenceUtil.isNotBlank(userAccount), "user_account", userAccount);
+        queryWrapper.like(CharSequenceUtil.isNotBlank(userName), "user_name", userName);
+        queryWrapper.like(CharSequenceUtil.isNotBlank(userProfile), "user_profile", userProfile);
+        queryWrapper.orderBy(CharSequenceUtil.isNotEmpty(sortField), sortOrder.equals("ascend"), sortField);
         return queryWrapper;
     }
 
@@ -245,6 +264,47 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public boolean isAdmin(User loginUser) {
         return loginUser != null && UserRoleEnum.ADMIN.getValue().equals(loginUser.getUserRole());
+    }
+
+    /**
+     * 校验字符串是否合法（无特殊字符）
+     *
+     * @param str 待校验字符串
+     * @return true：含特殊字符；false：合法（仅中英文、数字）
+     */
+    private boolean illegalStr(String str) {
+        if (str == null || str.trim().isEmpty()) {
+            return true;
+        }
+        return !ReUtil.isMatch(VALID_PATTERN, str);
+    }
+
+    /**
+     * 注册前的校验
+     *
+     * @param userName      用户昵称
+     * @param userAccount   用户账号
+     * @param userPassword  用户密码
+     * @param checkPassword 确认密码
+     * @param email         邮箱
+     * @param captcha       验证码
+     */
+    private void userRegisterVerify(String userName, String userAccount, String userPassword,
+                                    String checkPassword, String email, String captcha) {
+        ThrowUtils.throwIf(CharSequenceUtil.hasBlank(userName, userAccount, userPassword, checkPassword, email, captcha),
+                ErrorCode.PARAMS_ERROR, "参数为空!");
+        ThrowUtils.throwIf(this.illegalStr(userName) || this.illegalStr(userAccount),
+                ErrorCode.PARAMS_ERROR, "昵称或账号中包含特殊字符！");
+        ThrowUtils.throwIf(userName.length() < 2,
+                ErrorCode.PARAMS_ERROR, "用户昵称过短！");
+        ThrowUtils.throwIf(userAccount.length() < 4,
+                ErrorCode.PARAMS_ERROR, "账号长度小于4！");
+        ThrowUtils.throwIf(!Validator.isEmail(email), ErrorCode.PARAMS_ERROR, "邮箱格式错误！");
+        ThrowUtils.throwIf(userAccount.contains(" ") || userPassword.contains(" ") || checkPassword.contains(" "),
+                ErrorCode.PARAMS_ERROR, "用户账号/密码/确认密码不能包含空格！");
+        ThrowUtils.throwIf(userPassword.length() < 8 || checkPassword.length() < 8,
+                ErrorCode.PARAMS_ERROR, "用户密码过短!");
+        ThrowUtils.throwIf(!userPassword.equals(checkPassword), ErrorCode.PARAMS_ERROR, "两次输入的密码不一致!");
     }
 
 
