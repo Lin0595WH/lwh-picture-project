@@ -1,6 +1,7 @@
 package com.lwh.pictureproject.api.aliyunai.model;
 
 
+import cn.hutool.core.annotation.Alias;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,6 +19,7 @@ public class GetOutPaintingTaskResponse {
     /**
      * 请求唯一标识
      */
+    @Alias("request_id")
     private String requestId;
 
     /**
@@ -34,6 +36,7 @@ public class GetOutPaintingTaskResponse {
         /**
          * 任务 ID
          */
+        @Alias("task_id")
         private String taskId;
 
         /**
@@ -47,29 +50,34 @@ public class GetOutPaintingTaskResponse {
          *     <li>UNKNOWN：任务不存在或状态未知</li>
          * </ul>
          */
+        @Alias("task_status")
         private String taskStatus;
 
         /**
          * 提交时间
          * 格式：YYYY-MM-DD HH:mm:ss.SSS
          */
+        @Alias("submit_time")
         private String submitTime;
 
         /**
          * 调度时间
          * 格式：YYYY-MM-DD HH:mm:ss.SSS
          */
+        @Alias("scheduled_time")
         private String scheduledTime;
 
         /**
          * 结束时间
          * 格式：YYYY-MM-DD HH:mm:ss.SSS
          */
+        @Alias("end_time")
         private String endTime;
 
         /**
          * 输出图像的 URL
          */
+        @Alias("output_image_url")
         private String outputImageUrl;
 
         /**
@@ -87,6 +95,7 @@ public class GetOutPaintingTaskResponse {
         /**
          * 任务指标信息
          */
+        @Alias("task_metrics")
         private TaskMetrics taskMetrics;
     }
 

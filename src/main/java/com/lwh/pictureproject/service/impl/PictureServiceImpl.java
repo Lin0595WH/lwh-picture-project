@@ -813,6 +813,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture> impl
         CreateOutPaintingTaskRequest createOutPaintingTaskRequest = new CreateOutPaintingTaskRequest();
         CreateOutPaintingTaskRequest.Input input = new CreateOutPaintingTaskRequest.Input();
         input.setImageUrl(picture.getUrl());
+        input.setImageWidth(picture.getPicWidth());
+        input.setImageHeight(picture.getPicHeight());
         createOutPaintingTaskRequest.setInput(input);
         createOutPaintingTaskRequest.setParameters(createPictureOutPaintingTaskRequest.getParameters());
         // 创建任务

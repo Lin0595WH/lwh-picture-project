@@ -1,5 +1,6 @@
 package com.lwh.pictureproject.api.imagesearch.sub;
 
+import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.core.util.URLUtil;
 import cn.hutool.http.HttpRequest;
@@ -48,7 +49,8 @@ public class GetImagePageUrlApi {
             // 2. 发送请求
             HttpResponse httpResponse = HttpRequest.post(url)
                     .form(formData)
-                    .header("Acs-Token", "1741581075275_1741617348552_ElDxBUtssTMjNC3ASmMtlVhsQ0haipdDwqfVz2xxbzHBhxBMp76yW63e9Je61/8vuETY3OvX4XVyYMBp1b/yOS8fe32Zqn4UvIgmU8OJbtMgTp+ordexaS9Zl3ZyQrzGqSqAHpXy++QFvNX62pphGGtS561qLTHonHIXhV1GQjh6XscSME8lTblD1QzRzYok3fJCW5wvpw1jZCznOKGHJGNRLkpna1LtZaeKAX5XOva6awXDSUY6b2hfiV5nfcdkHDUTGv2zwnVtaNMrvY6Xo0xZhiHrIeh6F7ZoHvjpNmnC6O5Gf5QFH0IwOzhknu5syJeYReLdQQkeroxMbMMTCmbtcshO9J+eQc895g1SyCiD1wbu7sDQAqvVXwGyxgLgTRM3djJO+l+7EG4wAPeEFk0dqCC9Mlhhu8AzZ3yZnnpnCHFuvpwPaVjHsI+NdIqPeFxK1NLg0+W3Z8iI6gWH7RfX7sM9A/1VUk1Cdb0WoPk=")
+//                    .header("Acs-Token", "1741581075275_1741617348552_ElDxBUtssTMjNC3ASmMtlVhsQ0haipdDwqfVz2xxbzHBhxBMp76yW63e9Je61/8vuETY3OvX4XVyYMBp1b/yOS8fe32Zqn4UvIgmU8OJbtMgTp+ordexaS9Zl3ZyQrzGqSqAHpXy++QFvNX62pphGGtS561qLTHonHIXhV1GQjh6XscSME8lTblD1QzRzYok3fJCW5wvpw1jZCznOKGHJGNRLkpna1LtZaeKAX5XOva6awXDSUY6b2hfiV5nfcdkHDUTGv2zwnVtaNMrvY6Xo0xZhiHrIeh6F7ZoHvjpNmnC6O5Gf5QFH0IwOzhknu5syJeYReLdQQkeroxMbMMTCmbtcshO9J+eQc895g1SyCiD1wbu7sDQAqvVXwGyxgLgTRM3djJO+l+7EG4wAPeEFk0dqCC9Mlhhu8AzZ3yZnnpnCHFuvpwPaVjHsI+NdIqPeFxK1NLg0+W3Z8iI6gWH7RfX7sM9A/1VUk1Cdb0WoPk=")
+                    .header("acs-token", RandomUtil.randomString(1))
                     .timeout(5000)
                     .execute();
             if (httpResponse.getStatus() != HttpStatus.HTTP_OK) {

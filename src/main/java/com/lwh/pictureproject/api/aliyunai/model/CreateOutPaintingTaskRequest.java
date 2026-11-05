@@ -16,9 +16,9 @@ import java.io.Serializable;
 public class CreateOutPaintingTaskRequest implements Serializable {
 
     /**
-     * 模型，例如 "image-out-painting"
+     * 扩图模型
      */
-    private String model = "image-out-painting";
+    private String model = "qwen-image-2.1-turbo";
 
     /**
      * 输入图像信息
@@ -37,6 +37,11 @@ public class CreateOutPaintingTaskRequest implements Serializable {
          */
         @Alias("image_url")
         private String imageUrl;
+
+        /** Source dimensions used to preserve the existing x/y scale behavior. */
+        private Integer imageWidth;
+
+        private Integer imageHeight;
     }
 
     @Data

@@ -1,6 +1,7 @@
 package com.lwh.pictureproject.api.aliyunai.model;
 
 
+import cn.hutool.core.annotation.Alias;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -26,6 +27,7 @@ public class CreateOutPaintingTaskResponse {
         /**
          * 任务 ID
          */
+        @Alias("task_id")
         private String taskId;
 
         /**
@@ -39,6 +41,7 @@ public class CreateOutPaintingTaskResponse {
          *     <li>UNKNOWN：任务不存在或状态未知</li>
          * </ul>
          */
+        @Alias("task_status")
         private String taskStatus;
     }
 
@@ -58,6 +61,7 @@ public class CreateOutPaintingTaskResponse {
      * 请求唯一标识。
      * <p>可用于请求明细溯源和问题排查。</p>
      */
+    @Alias("request_id")
     private String requestId;
 
 }
